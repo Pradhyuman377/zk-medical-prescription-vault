@@ -1,0 +1,85 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  name          String
+  role          String         // "PATIENT", "DOCTOR", "PHARMACIST", "AUDITOR"
+  licenseNumber String?        // For doctors & pharmacists
+  clinic        String?
+  publicKey     String?        // Doctor public key for signature verification
+  privateKey    String?        // Simulated doctor private key for tamper-proof signing
+  createdAt     DateTime       @default(now())
+  
+  prescriptionsAuthored Prescription[] @relation("DoctorPrescriptions")
+  prescriptionsReceived Prescription[] @relation("PatientPrescriptions")
+  audits                PrescriptionAudit[]
+}
+
+model Prescription {
+  id                   String              @id @default(uuid())
+  patientId            String
+  doctorId             String
+  patientName          String
+  doctorName           String
+  clinicName           String
+  dateIssued           String
+  
+  // Status state machine (Prevents Double-Fill Replay Attacks!)
+  status               String              @default("ISSUED") // "ISSUED", "DISPENSED", "REVOKED"
+  
+  // Cryptographic Vault: AES-256-GCM Encrypted Payloads
+  // Split encryption facilitates SELECTIVE DISCLOSURE (Zero-Knowledge Privacy)
+  encryptedDiagnosis   String              // JSON { ciphertext, iv, authTag }
+  encryptedMedications String              // JSON { ciphertext, iv, authTag }
+  
+  // Tamper-Evident Integrity Fingerprint (SHA-256)
+  dataHash             String              // SHA-256 of canonical prescription content
+  
+  // Cryptographic Signature of Doctor (ECDSA/RSA simulation)
+  doctorSignature      String
+  
+  // Dispense tracking
+  dispensedByPharmacist String?
+  dispensedAt          DateTime?
+  
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  
+  doctor               User                @relation("DoctorPrescriptions", fields: [doctorId], references: [id])
+  patient              User                @relation("PatientPrescriptions", fields: [patientId], references: [id])
+  audits               PrescriptionAudit[]
+}
+
+model PrescriptionAudit {
+  id             String       @id @default(uuid())
+  prescriptionId String
+  userId         String
+  userRole       String
+  action         String       // "VIEWED", "DISPENSED", "TAMPER_VERIFIED", "UNAUTHORIZED_ATTEMPT"
+  ipAddress      String
+  userAgent      String?
+  timestamp      DateTime     @default(now())
+  
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+}
+
+model SecurityAlert {
+  id             String       @id @default(uuid())
+  severity       String       // "LOW", "MEDIUM", "HIGH", "CRITICAL"
+  type           String       // "RAPID_FILL_ATTEMPT", "DOUBLE_FILL_ATTACK", "TAMPER_DETECTED", "RATE_LIMIT_BURST"
+  details        String
+  prescriptionId String?
+  ipAddress      String
+  userId         String?
+  timestamp      DateTime     @default(now())
+}

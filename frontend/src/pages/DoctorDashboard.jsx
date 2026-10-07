@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { prescriptionService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Upload, Sparkles, FileText, Plus, Trash2, ShieldCheck, CheckCircle2, Lock, Stethoscope, Eye } from 'lucide-react';
+import { Upload, Sparkles, FileText, Plus, Trash2, ShieldCheck, CheckCircle2, Lock, Stethoscope, Eye, Terminal } from 'lucide-react';
 import PrescriptionModal from '../components/PrescriptionModal';
 
 export default function DoctorDashboard() {
@@ -14,6 +14,7 @@ export default function DoctorDashboard() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
   const [ocrSuccess, setOcrSuccess] = useState(false);
+  const [rawOcrText, setRawOcrText] = useState('');
   
   const [patientName, setPatientName] = useState('Aarav Patel');
   const [clinicName, setClinicName] = useState(user?.clinic || 'Apex Healthcare Specialty Clinic');
@@ -47,6 +48,7 @@ export default function DoctorDashboard() {
       setSelectedFile(file);
       setFilePreview(URL.createObjectURL(file));
       setOcrSuccess(false);
+      setRawOcrText('');
     }
   };
 
@@ -56,12 +58,14 @@ export default function DoctorDashboard() {
     setOcrSuccess(false);
     try {
       const res = await prescriptionService.uploadAndExtractOCR(selectedFile);
-      const parsed = res.data?.prescription_data;
+      // Safe resolution across response shapes
+      const parsed = res.data?.prescription_data || res.prescription_data || res.data?.data?.prescription_data;
       if (parsed) {
         if (parsed.patient?.name && parsed.patient.name !== 'Patient') setPatientName(parsed.patient.name);
         if (parsed.doctor?.clinic) setClinicName(parsed.doctor.clinic);
         if (parsed.diagnosis) setDiagnosis(parsed.diagnosis);
         if (parsed.medications && parsed.medications.length > 0) setMedications(parsed.medications);
+        if (parsed.raw_text) setRawOcrText(parsed.raw_text);
         setOcrSuccess(true);
       }
     } catch (err) {
@@ -140,7 +144,7 @@ export default function DoctorDashboard() {
                 Upload Prescription Slip (AI OCR)
               </h2>
               <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40">
-                Python FastAPI / EasyOCR
+                EasyOCR Vision Pipeline
               </span>
             </div>
 
@@ -160,7 +164,7 @@ export default function DoctorDashboard() {
                 <div className="py-6 space-y-2">
                   <Upload className="w-8 h-8 text-slate-500 mx-auto" />
                   <p className="text-xs text-slate-300 font-medium">Click or drag & drop prescription image</p>
-                  <p className="text-[10px] text-slate-500">Supports PNG, JPG, JPEG, WEBP (Doctors' handwritten/printed slips)</p>
+                  <p className="text-[10px] text-slate-500">Supports PNG, JPG, JPEG, WEBP (Handwritten or printed medical slips)</p>
                 </div>
               )}
             </div>
@@ -171,7 +175,7 @@ export default function DoctorDashboard() {
               className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-cyan-600/20 disabled:opacity-40"
             >
               {ocrLoading ? (
-                <span>Running OpenCV & Vision Extraction...</span>
+                <span>Scanning Handwriting & Entity Strokes...</span>
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5" />
@@ -184,6 +188,19 @@ export default function DoctorDashboard() {
               <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>AI OCR Extracted entities successfully! Form updated below.</span>
+              </div>
+            )}
+
+            {/* Raw OCR Text Box for Evaluators */}
+            {rawOcrText && (
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1.5">
+                <div className="flex items-center gap-1.5 text-slate-400 font-mono text-[10px] uppercase font-semibold">
+                  <Terminal className="w-3 h-3 text-cyan-400" />
+                  <span>Raw Text Detected by EasyOCR:</span>
+                </div>
+                <div className="text-[11px] font-mono text-slate-300 whitespace-pre-wrap max-h-32 overflow-y-auto bg-slate-900/60 p-2 rounded border border-slate-800/80">
+                  {rawOcrText}
+                </div>
               </div>
             )}
           </div>

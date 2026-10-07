@@ -72,6 +72,18 @@ export const securityService = {
   simulateTamper: async (id) => {
     const res = await api.post(`/security/simulate-tamper/${id}`);
     return res.data;
+  },
+  simulateDoubleFill: async () => {
+    const res = await api.post('/security/simulate/double-fill');
+    return res.data;
+  },
+  simulateTamperBitflip: async () => {
+    const res = await api.post('/security/simulate/tamper-bitflip');
+    return res.data;
+  },
+  simulateBotBurst: async () => {
+    const res = await api.post('/security/simulate/bot-burst');
+    return res.data;
   }
 };
 

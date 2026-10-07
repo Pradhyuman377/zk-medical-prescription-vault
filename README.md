@@ -1,11 +1,10 @@
 
-# 🔒 Zero-Knowledge Medical Prescription Vault
+# Zero-Knowledge Medical Prescription Vault
 
 A privacy-preserving, tamper-evident e-prescription management system combining **Deep Learning OCR**, **Role-Based Access Control (RBAC)**, **Zero-Knowledge Selective Disclosure**, **AES-256-GCM Cryptographic Vaulting**, and **Automated Anomaly Detection**.
 
----
 
-## 🏛️ System Architecture
+## System Architecture
 
 ```text
 [ React (Vite + Tailwind CSS + Lucide) ]
@@ -29,9 +28,8 @@ A privacy-preserving, tamper-evident e-prescription management system combining 
   └── Medical Entity Parser (Extracts Doctor, Clinic, Diagnosis, Medications, Dosages)
 ```
 
----
 
-## 🔑 Key Features & Security Innovations
+## Key Features & Security Innovations
 
 ### 1. Zero-Knowledge Selective Disclosure
 * **The Healthcare Problem:** Pharmacists need to know *what* medications to dispense, but have no legal or medical right to know sensitive diagnoses (e.g., oncology, psychiatric therapy, HIV status).
@@ -51,9 +49,8 @@ A privacy-preserving, tamper-evident e-prescription management system combining 
 * Sliding-window rate limiter monitors requests per IP and prescription fill frequency.
 * Spikes in rapid prescription queries (>20 requests in 10s or rapid dispense bursts) trigger automated threat alerts.
 
----
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 ### 1-Click Launch (Windows PowerShell)
 From the root workspace folder, run:
@@ -65,9 +62,8 @@ This automatically launches all three services:
 2. **Node.js Express Backend:** `http://localhost:5000`
 3. **React Vite Frontend:** `http://localhost:5173`
 
----
 
-## 👥 Demo Credentials (1-Click Switcher Available on Login Page)
+##  Demo Credentials (1-Click Switcher Available on Login Page)
 
 | Role | Name | Email | Password | Responsibilities |
 | :--- | :--- | :--- | :--- | :--- |
@@ -75,16 +71,3 @@ This automatically launches all three services:
 | **Patient** | Aarav Patel | `patient@vault.org` | `password123` | Inspect personal vault, copy Pharmacy Dispense ID |
 | **Pharmacist** | Liam Vance, R.Ph | `pharmacist@rxcare.org` | `password123` | Lookup ID, verify doctor signature, view meds only, dispense eRx |
 | **Auditor** | Elena Rostova | `auditor@cybersecurity.org` | `password123` | Monitor IDS anomalies, audit logs, run tamper attack simulations |
-
----
-
-## 👨‍💻 Team Task Division (3–4 Members)
-
-* **Member 1 (Database, Auth & RBAC):**
-  * Prisma schema (`backend/prisma/schema.prisma`), SQLite/Postgres configuration, JWT authentication, and RBAC role guards.
-* **Member 2 (Frontend & UI/UX):**
-  * React dashboards (`DoctorDashboard.jsx`, `PatientDashboard.jsx`, `PharmacistDashboard.jsx`, `SecurityDashboard.jsx`, `PrescriptionModal.jsx`).
-* **Member 3 (AI & OCR Pipeline):**
-  * Python FastAPI microservice (`ai_service/main.py`), OpenCV image enhancement (`preprocessor.py`), and entity parser (`parser.py`).
-* **Member 4 (Cryptography & Anomaly Detection):**
-  * AES-256-GCM encryption, SHA-256 canonical hashing, RSA-2048 signing (`cryptoService.js`), and sliding-window anomaly detector (`anomalyDetector.js`).

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/api';
 import { Lock, Stethoscope, User, Pill, ShieldCheck, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 
-export default function LoginPage() {
+export default function LoginPage({ onBack }) {
   const { login, register } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
@@ -67,6 +67,15 @@ export default function LoginPage() {
       <div className="absolute bottom-10 right-10 w-[400px] h-[400px] bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="max-w-md w-full space-y-8 relative z-10">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-xs text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1.5 font-medium -mb-4"
+          >
+            ← Back to Project Overview
+          </button>
+        )}
         
         {/* Header */}
         <div className="text-center space-y-2">

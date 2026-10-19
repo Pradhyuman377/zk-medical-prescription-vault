@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, Stethoscope, User, Pill, AlertTriangle, LogOut, Lock } from 'lucide-react';
 
-export default function Navbar({ activeTab, setActiveTab }) {
+export default function Navbar({ activeTab, setActiveTab, isGuest = false, onToggleLogin, showLogin = false }) {
   const { user, logout } = useAuth();
 
   const getRoleBadge = (role) => {
@@ -25,7 +25,10 @@ export default function Navbar({ activeTab, setActiveTab }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
         {/* Brand */}
-        <div className="flex items-center space-x-3">
+        <div 
+          onClick={() => { if (!user && onToggleLogin) onToggleLogin(false); }}
+          className={`flex items-center space-x-3 ${!user ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+        >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
             <Lock className="w-5 h-5 text-white" />
           </div>
@@ -105,8 +108,18 @@ export default function Navbar({ activeTab, setActiveTab }) {
             </button>
           </div>
         ) : (
-          <div className="text-xs text-slate-400">
-            Secure Session Inactive
+          <div className="flex items-center gap-3">
+            {onToggleLogin && (
+              <button
+                onClick={() => onToggleLogin(!showLogin)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white transition-all shadow-sm flex items-center gap-1.5"
+              >
+                {showLogin ? '← Project Overview' : 'Enter Vault / Sign In →'}
+              </button>
+            )}
+            <span className="hidden sm:inline-block text-[11px] text-slate-500 font-mono">
+              Guest Mode
+            </span>
           </div>
         )}
       </div>

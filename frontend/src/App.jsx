@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import DoctorDashboard from './pages/DoctorDashboard';
 import PatientDashboard from './pages/PatientDashboard';
@@ -10,6 +11,7 @@ import SecurityDashboard from './pages/SecurityDashboard';
 export default function App() {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('doctor');
+  const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -30,10 +32,31 @@ export default function App() {
   }
 
   if (!user) {
+    if (!showLogin) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100">
+          <Navbar 
+            activeTab="landing" 
+            setActiveTab={() => {}} 
+            isGuest={true}
+            onToggleLogin={() => setShowLogin(true)}
+            showLogin={false}
+          />
+          <LandingPage onGetStarted={() => setShowLogin(true)} />
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100">
-        <Navbar activeTab={null} setActiveTab={() => {}} />
-        <LoginPage />
+        <Navbar 
+          activeTab="login" 
+          setActiveTab={() => {}} 
+          isGuest={true}
+          onToggleLogin={() => setShowLogin(false)}
+          showLogin={true}
+        />
+        <LoginPage onBack={() => setShowLogin(false)} />
       </div>
     );
   }

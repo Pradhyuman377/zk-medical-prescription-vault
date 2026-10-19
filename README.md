@@ -350,31 +350,61 @@ Follow these 4 scenarios to demonstrate the core features:
 
 ---
 
-## 📡 REST API Reference
-
 ### Authentication Endpoints
-- `POST /api/auth/register` — Register a new user (`PATIENT`, `DOCTOR`, `PHARMACIST`, `AUDITOR`).
-- `POST /api/auth/login` — Authenticate and receive a 24-hour JWT token.
+- `POST /api/auth/register` — Register a new user (`PATIENT`, `DOCTOR`, `PHARMACIST`, `AUDITOR`) with automatic ECDH-secp256k1 and RSA keypair generation.
+- `POST /api/auth/login` — Rate-limited authentication (max 10 attempts/15 min) with 5-strike account lockout (15 min lock) and brute force detection.
 - `GET /api/auth/me` — Retrieve the current authenticated user profile.
-- `POST /api/auth/seed-demo` — Reset and seed the default demo accounts.
+- `POST /api/auth/seed-demo` — Reset and seed the default demo accounts with encrypted keys at rest.
 
 ### Prescription Management Endpoints
-- `POST /api/prescriptions/upload-ocr` — Upload slip image to Python AI service (Requires `DOCTOR` or `PATIENT`).
-- `POST /api/prescriptions/issue` — Canonical hash, RSA sign, and AES-256-GCM seal prescription (`DOCTOR`).
+- `POST /api/prescriptions/upload-ocr` — Upload slip image to Python AI service with per-entity confidence scores (`DOCTOR`, `PATIENT`).
+- `POST /api/prescriptions/check-interactions` — Analyze prescribed medicines for hazardous drug-drug interactions (`DOCTOR`, `PHARMACIST`).
+- `POST /api/prescriptions/issue` — Canonical hash, RSA sign, pairwise ECDH AES-256-GCM seal, and blockchain audit log (`DOCTOR`).
 - `GET /api/prescriptions` — List all prescriptions accessible to the authenticated user.
-- `GET /api/prescriptions/:id` — Retrieve prescription with role-based selective disclosure redaction.
-- `POST /api/prescriptions/:id/dispense` — Mark prescription as `DISPENSED` (`PHARMACIST`).
+- `GET /api/prescriptions/:id` — Retrieve prescription with role-based selective disclosure redaction and tamper verification.
+- `POST /api/prescriptions/:id/dispense` — Mark prescription as `DISPENSED` (`PHARMACIST`), guarding against replay attacks and revoked status.
+- `POST /api/prescriptions/:id/revoke` — Revoke prescription before fulfillment (`DOCTOR`), raising immediate alerts.
+- `GET /api/prescriptions/:id/qr` — Generate tamper-proof HMAC-SHA256 QR code for contactless pharmacy presentation.
+- `POST /api/prescriptions/verify-qr` — Scan and verify HMAC-signed QR token for instant lookup.
 
 ### Security & Anomaly Detection Endpoints
 - `GET /api/security/alerts` — Fetch real-time IDS security alerts (`AUDITOR`).
-- `GET /api/security/audit-logs` — Retrieve cryptographic access audit logs (`AUDITOR`).
+- `GET /api/security/audit-logs` — Retrieve cryptographic access audit logs with previous & current hash chain pointers.
+- `GET /api/security/verify-audit-chain` — Cryptographically traverse and verify complete blockchain-style audit chain from Genesis to tip.
 - `POST /api/security/simulate/double-fill` — Trigger simulated double-fill replay attack.
 - `POST /api/security/simulate/tamper-bitflip` — Trigger simulated database bit-flip tampering.
 - `POST /api/security/simulate/bot-burst` — Trigger simulated automated rate-limit burst.
 
 ### AI Microservice Endpoints (`:8000`)
 - `GET /health` — Check status of EasyOCR and Vision-Language models.
-- `POST /api/ocr/extract` — Upload an image file for OpenCV preprocessing and entity extraction.
+- `POST /api/ocr/extract` — Deep learning HTR text extraction with confidence scoring (EasyOCR detail=1).
+- `POST /api/interactions/check` — Fast clinical drug-drug interaction checker engine across ~30 critical medication pairs.
+
+---
+
+## 💎 Advanced Technical Differentiators Added
+
+### 1. Elliptic Curve Diffie-Hellman (ECDH-secp256k1) Key Agreement
+Instead of relying purely on a single global master key, the vault supports pairwise forward secrecy:
+- During registration, each user is provisioned a `secp256k1` ECDH keypair.
+- When Doctor Alice prescribes medication for Patient Bob, a unique symmetric AES-256-GCM key is derived via:
+  $$K_{\text{derived}} = \text{SHA-256}\left(\text{ECDH}(\text{Priv}_{\text{Doctor}}, \text{Pub}_{\text{Patient}})\right)$$
+- The resulting prescription is encrypted using $K_{\text{derived}}$, guaranteeing that only authorized participants can decrypt the payload.
+
+### 2. Blockchain-Style Immutable Audit Hash Chain
+Every critical access, issuance, dispensation, and revocation event is anchored in a cryptographic hash chain:
+$$H_i = \text{SHA-256}(\text{Action} \parallel \text{PrescriptionID} \parallel \text{UserID} \parallel \text{Timestamp} \parallel H_{i-1})$$
+- Auditor dashboards feature a **🔗 Verify Audit Chain Integrity** button that scans the ledger from `GENESIS` to the current tip, detecting any retroactive log modification or row deletion.
+
+### 3. Contactless QR Code Sharing with HMAC Tamper Protection
+- Patients can export their e-prescriptions as high-resolution QR codes encoded with an authenticating cryptographic message authentication code:
+  $$\text{HMAC} = \text{HMAC-SHA256}(\text{PrescriptionID}, K_{\text{Vault}})$$
+- Pharmacists can scan or paste this token into their terminal. The backend validates the HMAC in constant time to prevent QR spoofing or brute-force scanning.
+
+### 4. Drug-Drug Interaction Warning Engine & OCR Confidence Scoring
+- **AI Confidence Scoring:** EasyOCR runs in `detail=1` mode to extract word and line-level confidence probabilities. High confidence ($\ge 85\%$) items appear green, while uncertain words ($<60\%$) alert doctors to verify manually.
+- **Polypharmacy Safety:** A database of 30+ critical clinical interaction pairs automatically cross-checks medications before signing, warning doctors of hazardous combinations like Warfarin + Aspirin (hemorrhage) or Metformin + Alcohol (lactic acidosis).
+
 
 ---
 

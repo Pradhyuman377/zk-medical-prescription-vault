@@ -8,16 +8,20 @@ generator client {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  password      String
-  name          String
-  role          String         // "PATIENT", "DOCTOR", "PHARMACIST", "AUDITOR"
-  licenseNumber String?        // For doctors & pharmacists
-  clinic        String?
-  publicKey     String?        // Doctor public key for signature verification
-  privateKey    String?        // Simulated doctor private key for tamper-proof signing
-  createdAt     DateTime       @default(now())
+  id                  String         @id @default(uuid())
+  email               String         @unique
+  password            String
+  name                String
+  role                String         // "PATIENT", "DOCTOR", "PHARMACIST", "AUDITOR"
+  licenseNumber       String?        // For doctors & pharmacists
+  clinic              String?
+  publicKey           String?        // Doctor RSA public key for signature verification
+  privateKey          String?        // Doctor RSA private key (AES-256 encrypted at rest)
+  ecdhPublicKey       String?        // secp256k1 ECDH public key for pairwise key agreement
+  ecdhPrivateKey      String?        // secp256k1 ECDH private key (AES-256 encrypted at rest)
+  failedLoginAttempts Int            @default(0) // Rate limiting / Brute force lockout counter
+  lockedUntil         DateTime?      // Account lockout expiration timestamp
+  createdAt           DateTime       @default(now())
   
   prescriptionsAuthored Prescription[] @relation("DoctorPrescriptions")
   prescriptionsReceived Prescription[] @relation("PatientPrescriptions")
@@ -40,11 +44,12 @@ model Prescription {
   // Split encryption facilitates SELECTIVE DISCLOSURE (Zero-Knowledge Privacy)
   encryptedDiagnosis   String              // JSON { ciphertext, iv, authTag }
   encryptedMedications String              // JSON { ciphertext, iv, authTag }
+  keyExchangeUsed      String?             // e.g. "ECDH-secp256k1" or "MASTER_KEY"
   
   // Tamper-Evident Integrity Fingerprint (SHA-256)
   dataHash             String              // SHA-256 of canonical prescription content
   
-  // Cryptographic Signature of Doctor (ECDSA/RSA simulation)
+  // Cryptographic Signature of Doctor (RSA-2048)
   doctorSignature      String
   
   // Dispense tracking
@@ -64,10 +69,12 @@ model PrescriptionAudit {
   prescriptionId String
   userId         String
   userRole       String
-  action         String       // "VIEWED", "DISPENSED", "TAMPER_VERIFIED", "UNAUTHORIZED_ATTEMPT"
+  action         String       // "VIEWED", "DISPENSED", "TAMPER_VERIFIED", "UNAUTHORIZED_ATTEMPT", "PRESCRIPTION_REVOKED"
   ipAddress      String
   userAgent      String?
   timestamp      DateTime     @default(now())
+  entryHash      String?      // Blockchain-style cryptographic hash of this log entry
+  previousHash   String?      // Pointer to previous audit log entry hash (hash chain)
   
   prescription   Prescription @relation(fields: [prescriptionId], references: [id])
   user           User         @relation(fields: [userId], references: [id])
@@ -76,10 +83,11 @@ model PrescriptionAudit {
 model SecurityAlert {
   id             String       @id @default(uuid())
   severity       String       // "LOW", "MEDIUM", "HIGH", "CRITICAL"
-  type           String       // "RAPID_FILL_ATTEMPT", "DOUBLE_FILL_ATTACK", "TAMPER_DETECTED", "RATE_LIMIT_BURST"
+  type           String       // "RAPID_FILL_ATTEMPT", "DOUBLE_FILL_ATTACK", "TAMPER_DETECTED", "RATE_LIMIT_BURST", "BRUTE_FORCE_DETECTED", "REVOCATION_ALERT"
   details        String
   prescriptionId String?
   ipAddress      String
   userId         String?
   timestamp      DateTime     @default(now())
 }
+

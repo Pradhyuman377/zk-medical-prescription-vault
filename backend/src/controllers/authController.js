@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/db');
 const CryptoService = require('../services/cryptoService');
+const AnomalyDetector = require('../middleware/anomalyDetector');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'medical_vault_jwt_super_secret_key_2026_xyz';
 
@@ -27,13 +28,21 @@ class AuthController {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
-      // If user is a DOCTOR, generate an asymmetric RSA keypair for tamper-proof digital signing
+      // TASK 12: Generate ECDH keypair (secp256k1) for pairwise key agreement across ALL roles
+      const ecdhPair = CryptoService.generateECDHKeyPair();
+      // TASK 5: Encrypt private key at rest using Master Vault Key
+      // Production: Use HSM/KMS for private key storage
+      const encryptedEcdhPrivateKey = CryptoService.encryptPrivateKey(ecdhPair.privateKey);
+
+      // If user is a DOCTOR, generate an asymmetric RSA keypair for digital signing
       let publicKey = null;
-      let privateKey = null;
+      let encryptedRsaPrivateKey = null;
       if (role === 'DOCTOR') {
         const keyPair = CryptoService.generateDoctorKeyPair();
         publicKey = keyPair.publicKey;
-        privateKey = keyPair.privateKey;
+        // TASK 5: Encrypt private key at rest
+        // Production: Use HSM/KMS for private key storage
+        encryptedRsaPrivateKey = CryptoService.encryptPrivateKey(keyPair.privateKey);
       }
 
       const user = await prisma.user.create({
@@ -45,7 +54,11 @@ class AuthController {
           licenseNumber: licenseNumber || null,
           clinic: clinic || null,
           publicKey,
-          privateKey
+          privateKey: encryptedRsaPrivateKey,
+          ecdhPublicKey: ecdhPair.publicKey,
+          ecdhPrivateKey: encryptedEcdhPrivateKey,
+          failedLoginAttempts: 0,
+          lockedUntil: null
         }
       });
 
@@ -56,7 +69,7 @@ class AuthController {
       );
 
       return res.status(201).json({
-        message: 'User registered successfully.',
+        message: 'User registered successfully with encrypted keys at rest.',
         token,
         user: {
           id: user.id,
@@ -65,7 +78,8 @@ class AuthController {
           role: user.role,
           licenseNumber: user.licenseNumber,
           clinic: user.clinic,
-          hasKeyPair: !!publicKey
+          hasKeyPair: !!publicKey,
+          hasEcdhKey: !!ecdhPair.publicKey
         }
       });
     } catch (error) {
@@ -74,9 +88,13 @@ class AuthController {
     }
   }
 
+  /**
+   * TASK 6: Failed login tracking + account lockout + brute force alerts
+   */
   static async login(req, res) {
     try {
       const { email, password } = req.body;
+      const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
 
       if (!email || !password) {
         return res.status(400).json({ error: 'Email and password are required.' });
@@ -87,10 +105,61 @@ class AuthController {
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
 
+      // Check if user is currently locked out
+      const now = new Date();
+      if (user.lockedUntil && new Date(user.lockedUntil) > now) {
+        const remainingMs = new Date(user.lockedUntil).getTime() - now.getTime();
+        const remainingMins = Math.ceil(remainingMs / 60000);
+        return res.status(423).json({
+          error: `Account is temporarily locked due to repeated failed login attempts. Please try again in ${remainingMins} minute(s).`,
+          lockedUntil: user.lockedUntil
+        });
+      }
+
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) {
-        return res.status(401).json({ error: 'Invalid email or password.' });
+        const attempts = (user.failedLoginAttempts || 0) + 1;
+        let updateData = { failedLoginAttempts: attempts };
+
+        if (attempts >= 5) {
+          const lockTime = new Date(Date.now() + 15 * 60 * 1000); // 15-minute lockout
+          updateData.lockedUntil = lockTime;
+
+          await AnomalyDetector.recordAlert({
+            severity: 'HIGH',
+            type: 'BRUTE_FORCE_DETECTED',
+            details: `Account lockout triggered: 5 consecutive failed login attempts on account ${email} from IP: ${ip}. Account locked for 15 minutes.`,
+            ipAddress: String(ip),
+            userId: user.id
+          });
+        }
+
+        await prisma.user.update({
+          where: { id: user.id },
+          data: updateData
+        });
+
+        if (attempts >= 5) {
+          return res.status(423).json({
+            error: 'Account locked for 15 minutes due to 5 consecutive failed login attempts.',
+            lockedUntil: updateData.lockedUntil
+          });
+        }
+
+        const remaining = 5 - attempts;
+        return res.status(401).json({
+          error: `Invalid email or password. ${remaining} attempt(s) remaining before account lockout.`
+        });
       }
+
+      // Successful login: reset lockout counters
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null
+        }
+      });
 
       const token = jwt.sign(
         { userId: user.id, role: user.role, email: user.email },
@@ -108,7 +177,8 @@ class AuthController {
           role: user.role,
           licenseNumber: user.licenseNumber,
           clinic: user.clinic,
-          hasKeyPair: !!user.publicKey
+          hasKeyPair: !!user.publicKey,
+          hasEcdhKey: !!user.ecdhPublicKey
         }
       });
     } catch (error) {
@@ -122,7 +192,7 @@ class AuthController {
   }
 
   /**
-   * Helper to seed demo accounts for each role
+   * Helper to seed demo accounts for each role with encrypted keys at rest
    */
   static async seedDemoAccounts(req, res) {
     try {
@@ -134,16 +204,22 @@ class AuthController {
       ];
 
       for (const u of demoUsers) {
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(u.password, salt);
+
+        // ECDH keypair
+        const ecdhPair = CryptoService.generateECDHKeyPair();
+        const encryptedEcdhPriv = CryptoService.encryptPrivateKey(ecdhPair.privateKey);
+
+        let pub = null, encryptedPriv = null;
+        if (u.role === 'DOCTOR') {
+          const pair = CryptoService.generateDoctorKeyPair();
+          pub = pair.publicKey;
+          encryptedPriv = CryptoService.encryptPrivateKey(pair.privateKey);
+        }
+
         const exists = await prisma.user.findUnique({ where: { email: u.email } });
         if (!exists) {
-          const salt = await bcrypt.genSalt(10);
-          const hashedPassword = await bcrypt.hash(u.password, salt);
-          let pub = null, priv = null;
-          if (u.role === 'DOCTOR') {
-            const pair = CryptoService.generateDoctorKeyPair();
-            pub = pair.publicKey;
-            priv = pair.privateKey;
-          }
           await prisma.user.create({
             data: {
               email: u.email,
@@ -153,13 +229,28 @@ class AuthController {
               licenseNumber: u.licenseNumber,
               clinic: u.clinic,
               publicKey: pub,
-              privateKey: priv
+              privateKey: encryptedPriv,
+              ecdhPublicKey: ecdhPair.publicKey,
+              ecdhPrivateKey: encryptedEcdhPriv,
+              failedLoginAttempts: 0,
+              lockedUntil: null
+            }
+          });
+        } else {
+          // Update missing keys or reset lockout
+          await prisma.user.update({
+            where: { email: u.email },
+            data: {
+              failedLoginAttempts: 0,
+              lockedUntil: null,
+              ...(exists.ecdhPublicKey ? {} : { ecdhPublicKey: ecdhPair.publicKey, ecdhPrivateKey: encryptedEcdhPriv }),
+              ...(u.role === 'DOCTOR' && !exists.publicKey ? { publicKey: pub, privateKey: encryptedPriv } : {})
             }
           });
         }
       }
 
-      return res.json({ message: 'Demo accounts seeded successfully. You can login with password "password123"' });
+      return res.json({ message: 'Demo accounts seeded successfully with encrypted keys and lockout support. You can login with password "password123"' });
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }

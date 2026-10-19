@@ -1,5 +1,5 @@
 import re
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 # Common clinical medicine names dictionary for robust medical NER
 COMMON_DRUGS = [
@@ -15,14 +15,26 @@ COMMON_DRUGS = [
 
 class PrescriptionParser:
     @staticmethod
-    def parse(raw_text: str) -> Dict[str, Any]:
+    def parse(raw_text: str, segments: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """
+        Parses OCR text and segments into structured clinical entities with confidence scores.
+        """
         lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
-        
+        conf_map = {}
+        if segments:
+            for s in segments:
+                conf_map[s["text"].strip().lower()] = s.get("confidence", 0.85)
+
         doctor_info = PrescriptionParser._extract_doctor(lines, raw_text)
         patient_info = PrescriptionParser._extract_patient(lines, raw_text)
-        medications = PrescriptionParser._extract_medications(lines)
+        medications = PrescriptionParser._extract_medications(lines, conf_map)
         diagnosis = PrescriptionParser._extract_diagnosis(lines, raw_text)
         date = PrescriptionParser._extract_date(raw_text)
+
+        # Compute overall average confidence
+        overall_conf = 0.88
+        if segments and len(segments) > 0:
+            overall_conf = round(sum(s.get("confidence", 0.85) for s in segments) / len(segments), 3)
 
         return {
             "doctor": doctor_info,
@@ -30,14 +42,15 @@ class PrescriptionParser:
             "date": date,
             "diagnosis": diagnosis,
             "medications": medications,
+            "confidence_score": overall_conf,
             "raw_text": raw_text
         }
 
     @staticmethod
     def _extract_doctor(lines: List[str], text: str) -> Dict[str, str]:
-        doc_name = "Dr. Registered Medical Practitioner"
-        license_no = "N/A"
-        clinic_name = "Healthcare Specialty Clinic"
+        doc_name = ""
+        license_no = ""
+        clinic_name = ""
 
         # Regex for Dr. Name
         match_dr = re.search(r'(?:Dr\.|Doctor)\s+([A-Za-z\.\s]+?)(?:,|\n|MD|MBBS|MS|\b)', text, re.IGNORECASE)
@@ -68,9 +81,9 @@ class PrescriptionParser:
 
     @staticmethod
     def _extract_patient(lines: List[str], text: str) -> Dict[str, str]:
-        name = "Patient"
-        age = "N/A"
-        gender = "N/A"
+        name = ""
+        age = ""
+        gender = ""
 
         match_name = re.search(r'(?:Pt|Patient|Name)\s*[:\-]?\s*([A-Za-z\s]+?)(?:\s+(?:Age|Sex|Gender|Date|\n)|$)', text, re.IGNORECASE)
         if match_name:
@@ -92,7 +105,7 @@ class PrescriptionParser:
         match_date = re.search(r'\b(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})\b', text)
         if match_date:
             return match_date.group(1)
-        return "Current Date"
+        return ""
 
     @staticmethod
     def _extract_diagnosis(lines: List[str], text: str) -> str:
@@ -102,13 +115,23 @@ class PrescriptionParser:
         
         # Check for clinical diagnosis terms
         for line in lines:
-            if any(term in line.lower() for term in ["fever", "infection", "cough", "diabetes", "hypertension", "pain", "sinusitis"]):
+            if any(term in line.lower() for term in ["fever", "infection", "cough", "diabetes", "hypertension", "pain", "sinusitis", "asthma", "bronchitis"]):
                 return line.strip()
                 
-        return "Clinical Assessment Recorded"
+        return ""
 
     @staticmethod
-    def _extract_medications(lines: List[str]) -> List[Dict[str, str]]:
+    def _find_best_confidence(line: str, conf_map: Dict[str, float]) -> float:
+        line_clean = line.strip().lower()
+        if line_clean in conf_map:
+            return conf_map[line_clean]
+        for k, v in conf_map.items():
+            if k in line_clean or line_clean in k:
+                return v
+        return 0.88
+
+    @staticmethod
+    def _extract_medications(lines: List[str], conf_map: Dict[str, float]) -> List[Dict[str, Any]]:
         meds = []
         rx_found = False
         
@@ -123,32 +146,40 @@ class PrescriptionParser:
             if "rx" in line_lower or "medicines" in line_lower or "prescription" in line_lower:
                 rx_found = True
             
-            # Skip non-medication lines
-            is_header = any(kw in line_lower for kw in [
+            # Skip non-medication lines (headers, footers, instructions)
+            is_header_or_footer = any(kw in line_lower for kw in [
                 "patient", "doctor", "clinic", "hospital", "diagnosis", "address", 
-                "date", "signature", "phone", "email", "reg no", "age", "gender"
+                "date", "signature", "phone", "email", "reg no", "age", "gender",
+                "instructions:", "avoid", "rinse", "vault record", "encrypted", "pediatric"
             ])
-            if is_header:
+            if is_header_or_footer:
                 continue
 
-            # Check if line matches known drugs or dosage formats
+            # Skip dosage sublines like 'Dosage: 2 puffs...'
+            if line_lower.startswith("dosage:") or line_lower.startswith("dosage"):
+                continue
+
+            # Check if line matches known drugs or dosage formats or numbered items
+            is_numbered_med = bool(re.match(r'^\d+[\.\)]\s*', line))
             has_drug_name = any(drug in line_lower for drug in COMMON_DRUGS)
             dosage_match = dosage_regex.search(line)
             freq_match = freq_regex.search(line)
             duration_match = duration_regex.search(line)
 
-            if has_drug_name or dosage_match or (rx_found and len(line.split()) >= 1):
+            if is_numbered_med or has_drug_name or (dosage_match and len(line.split()) <= 6):
                 clean_name = re.sub(r'^(?:\d+[\.\)]\s*|(?:Tab|Cap|Syp|Inj|Rx)\.?\s*)', '', line, flags=re.IGNORECASE).strip()
                 clean_name = re.sub(r'\d+(?:\.\d+)?\s*(?:mg|ml|mcg|g).*', '', clean_name, flags=re.IGNORECASE).strip()
                 
                 if len(clean_name) >= 2 and clean_name.lower() not in seen_names:
                     seen_names.add(clean_name.lower())
+                    med_conf = PrescriptionParser._find_best_confidence(line, conf_map)
                     meds.append({
                         "drug_name": clean_name,
                         "dosage": dosage_match.group(1) if dosage_match else "500 mg",
                         "frequency": freq_match.group(1).upper() if freq_match else "1-0-1",
                         "duration": duration_match.group(1) if duration_match else "5 days",
-                        "instructions": "After food" if "after" in line_lower or "food" in line_lower else "As directed"
+                        "instructions": "After food" if "after" in line_lower or "food" in line_lower else "As directed",
+                        "confidence": med_conf
                     })
 
         # If OCR returned lines but none matched formal patterns, treat non-header lines as potential drugs
@@ -164,17 +195,8 @@ class PrescriptionParser:
                             "dosage": "As prescribed",
                             "frequency": "1-0-1",
                             "duration": "5 days",
-                            "instructions": "As directed"
+                            "instructions": "As directed",
+                            "confidence": 0.75
                         })
-
-        # Default fallback only if OCR literally found zero text
-        if not meds:
-            meds.append({
-                "drug_name": "Prescribed Medication (Please specify)",
-                "dosage": "500 mg",
-                "frequency": "1-0-1",
-                "duration": "5 days",
-                "instructions": "As directed by physician"
-            })
 
         return meds

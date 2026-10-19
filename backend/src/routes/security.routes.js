@@ -12,8 +12,12 @@ router.get('/alerts', authenticate, SecurityController.getAlerts);
 // View cryptographic audit logs
 router.get('/audit-logs', authenticate, SecurityController.getAuditLogs);
 
+// TASK 10: Verify blockchain-style immutable audit hash chain integrity
+router.get('/verify-audit-chain', authenticate, SecurityController.verifyAuditChain);
+
 // Evaluator attack demo: intentionally corrupts a hash in DB
 router.post('/simulate-tamper/:id', authenticate, SecurityController.simulateTamperAttack);
+
 
 // 1-Click Attack Sandbox Endpoints for Live Demonstrations
 router.post('/simulate/double-fill', authenticate, async (req, res) => {

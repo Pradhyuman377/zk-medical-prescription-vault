@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const AuditService = require('../services/auditService');
 
 class SecurityController {
   static async getAlerts(req, res) {
@@ -24,6 +25,18 @@ class SecurityController {
         }
       });
       return res.json({ logs });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * TASK 10: Blockchain-Style Immutable Audit Hash Chain Verification
+   */
+  static async verifyAuditChain(req, res) {
+    try {
+      const result = await AuditService.verifyAuditChain();
+      return res.json(result);
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }

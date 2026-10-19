@@ -42,6 +42,10 @@ export const prescriptionService = {
     });
     return res.data;
   },
+  checkInteractions: async (medications) => {
+    const res = await api.post('/prescriptions/check-interactions', { medications });
+    return res.data;
+  },
   issuePrescription: async (payload) => {
     const res = await api.post('/prescriptions/issue', payload);
     return res.data;
@@ -57,6 +61,18 @@ export const prescriptionService = {
   dispensePrescription: async (id) => {
     const res = await api.post(`/prescriptions/${id}/dispense`);
     return res.data;
+  },
+  revokePrescription: async (id) => {
+    const res = await api.post(`/prescriptions/${id}/revoke`);
+    return res.data;
+  },
+  getPrescriptionQR: async (id) => {
+    const res = await api.get(`/prescriptions/${id}/qr`);
+    return res.data;
+  },
+  verifyQRCode: async (payload) => {
+    const res = await api.post('/prescriptions/verify-qr', payload);
+    return res.data;
   }
 };
 
@@ -67,6 +83,10 @@ export const securityService = {
   },
   getAuditLogs: async () => {
     const res = await api.get('/security/audit-logs');
+    return res.data;
+  },
+  verifyAuditChain: async () => {
+    const res = await api.get('/security/verify-audit-chain');
     return res.data;
   },
   simulateTamper: async (id) => {

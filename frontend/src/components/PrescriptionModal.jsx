@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { prescriptionService, securityService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { X, ShieldCheck, AlertCircle, Key, CheckCircle, FileText, Lock, Pill, User, Building, Calendar, AlertTriangle } from 'lucide-react';
+import { 
+  X, ShieldCheck, AlertCircle, Key, CheckCircle, FileText, 
+  Lock, Pill, User, Building, Calendar, AlertTriangle, Ban, ShieldAlert 
+} from 'lucide-react';
 
 export default function PrescriptionModal({ prescriptionId, onClose, onDispensed }) {
   const { user } = useAuth();
@@ -78,7 +81,7 @@ export default function PrescriptionModal({ prescriptionId, onClose, onDispensed
                   {prescriptionId.slice(0, 8)}...
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">Decrypted on-the-fly via AES-256-GCM Vault</p>
+              <p className="text-xs text-slate-400">Decrypted on-the-fly via AES-256-GCM + ECDH Vault</p>
             </div>
           </div>
           <button
@@ -117,6 +120,19 @@ export default function PrescriptionModal({ prescriptionId, onClose, onDispensed
 
           {data && (
             <>
+              {/* TASK 7: Revocation Notice if Revoked */}
+              {data.status === 'REVOKED' && (
+                <div className="p-4 bg-red-950/50 border border-red-500/60 rounded-xl text-red-200 text-xs flex items-start gap-3 shadow-lg">
+                  <Ban className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-sm text-red-400">PRESCRIPTION REVOKED BY DOCTOR</p>
+                    <p className="mt-0.5 text-red-200">
+                      This prescription has been officially revoked by the issuing medical practitioner. Pharmacists are strictly prohibited from dispensing medications against this record.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Cryptographic Proof Badges */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className={`p-3 rounded-xl border flex items-center gap-3 ${
@@ -136,7 +152,7 @@ export default function PrescriptionModal({ prescriptionId, onClose, onDispensed
                 <div className="p-3 rounded-xl border bg-blue-950/20 border-blue-500/30 text-blue-400 flex items-center gap-3">
                   <Key className="w-5 h-5 flex-shrink-0" />
                   <div>
-                    <p className="text-xs font-semibold">Doctor RSA Signature</p>
+                    <p className="text-xs font-semibold">Doctor RSA-2048 Signature</p>
                     <p className="text-[10px] opacity-80">
                       {data.cryptoVerification?.isDoctorSignatureValid ? 'Authentic (Valid Key)' : 'Digital Signature Active'}
                     </p>
@@ -192,9 +208,11 @@ export default function PrescriptionModal({ prescriptionId, onClose, onDispensed
                 <div>
                   <span className="text-slate-400 block mb-1">Status</span>
                   <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                    data.status === 'DISPENSED' 
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
-                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    data.status === 'REVOKED'
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      : data.status === 'DISPENSED' 
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+                        : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                   }`}>
                     {data.status}
                   </span>
@@ -241,9 +259,14 @@ export default function PrescriptionModal({ prescriptionId, onClose, onDispensed
                 </div>
               </div>
 
-              {/* Cryptographic SHA-256 Fingerprint */}
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 font-mono text-[11px] space-y-1">
-                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Immutable Cryptographic Fingerprint (SHA-256):</span>
+              {/* Cryptographic SHA-256 Fingerprint & Key Exchange Info */}
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 font-mono text-[11px] space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-[10px] uppercase font-semibold">Immutable Fingerprint (SHA-256):</span>
+                  <span className="text-cyan-400 text-[10px] font-sans">
+                    Key Agreement: {data.keyExchangeUsed || 'ECDH-secp256k1'}
+                  </span>
+                </div>
                 <span className="text-emerald-400 break-all select-all block">{data.cryptoVerification?.dataHash}</span>
               </div>
 
@@ -281,7 +304,7 @@ export default function PrescriptionModal({ prescriptionId, onClose, onDispensed
               Close
             </button>
 
-            {user?.role === 'PHARMACIST' && data?.status !== 'DISPENSED' && (
+            {user?.role === 'PHARMACIST' && data?.status !== 'DISPENSED' && data?.status !== 'REVOKED' && (
               <button
                 onClick={handleDispense}
                 disabled={dispensing || !data?.cryptoVerification?.isIntegrityValid}

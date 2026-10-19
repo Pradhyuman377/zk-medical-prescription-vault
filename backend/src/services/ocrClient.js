@@ -25,53 +25,54 @@ class OCRClient {
       return response.data;
     } catch (error) {
       if (error.code === 'ECONNREFUSED') {
-        console.warn(`[OCR Client] AI service at ${AI_SERVICE_URL} not reachable. Using fallback parser.`);
-        return {
-          success: true,
-          ocr_backend_used: 'fallback_mock',
-          prescription_data: {
-            doctor: {
-              name: 'Dr. Rajesh Sharma, MD',
-              license_number: 'MED-KA-2023-88419',
-              clinic: 'Apex Specialty Clinic, Bangalore'
-            },
-            patient: {
-              name: 'Aarav Patel',
-              age: '32',
-              gender: 'Male'
-            },
-            date: new Date().toLocaleDateString(),
-            diagnosis: 'Acute Bacterial Sinusitis (Confidential)',
-            medications: [
-              {
-                drug_name: 'Amoxicillin & Clavulanate',
-                dosage: '625 mg',
-                frequency: '1-0-1 (Twice Daily)',
-                duration: '5 days',
-                instructions: 'Take after meals'
-              },
-              {
-                drug_name: 'Montelukast + Levocetirizine',
-                dosage: '10 mg',
-                frequency: '0-0-1 (Bedtime)',
-                duration: '7 days',
-                instructions: 'Take at night'
-              },
-              {
-                drug_name: 'Paracetamol',
-                dosage: '650 mg',
-                frequency: 'SOS',
-                duration: '3 days',
-                instructions: 'For fever or severe headache'
-              }
-            ],
-            raw_text: '[Fallback simulated OCR parsed response]'
-          }
-        };
+        throw new Error(`AI OCR service is unreachable at ${AI_SERVICE_URL}. Please ensure the Python service is running on port 8000.`);
       }
       throw error;
+    }
+  }
+
+  /**
+   * TASK 8: Calls AI Service Drug-Drug Interaction Checker microservice
+   */
+  static async checkInteractions(medications) {
+    try {
+      const response = await axios.post(`${AI_SERVICE_URL}/api/interactions/check`, {
+        medications: Array.isArray(medications) ? medications : []
+      }, {
+        timeout: 10000
+      });
+      return response.data;
+    } catch (error) {
+      console.warn(`[OCR Client] Interaction checker failed or unavailable (${error.message}). Using local fallback checker.`);
+      // Local fallback interaction checker if AI service is offline
+      const drugList = (medications || []).map(m => (typeof m === 'string' ? m : m.drug_name || '').toLowerCase());
+      const flagged = [];
+      
+      const pairs = [
+        { drug_a: 'warfarin', drug_b: 'aspirin', severity: 'HIGH', risk: 'Severe bleeding risk / hemorrhagic stroke' },
+        { drug_a: 'metformin', drug_b: 'alcohol', severity: 'HIGH', risk: 'Lactic acidosis risk' },
+        { drug_a: 'ciprofloxacin', drug_b: 'antacid', severity: 'MEDIUM', risk: 'Reduced fluoroquinolone antibiotic absorption' },
+        { drug_a: 'atorvastatin', drug_b: 'clarithromycin', severity: 'HIGH', risk: 'Increased statin concentration and rhabdomyolysis risk' },
+        { drug_a: 'ibuprofen', drug_b: 'aspirin', severity: 'MEDIUM', risk: 'Increased gastrointestinal ulceration risk' }
+      ];
+
+      for (const pair of pairs) {
+        const hasA = drugList.some(d => d.includes(pair.drug_a));
+        const hasB = drugList.some(d => d.includes(pair.drug_b));
+        if (hasA && hasB) {
+          flagged.push(pair);
+        }
+      }
+
+      return {
+        success: true,
+        source: 'backend_fallback_rule_engine',
+        flagged_count: flagged.length,
+        interactions: flagged
+      };
     }
   }
 }
 
 module.exports = OCRClient;
+

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { prescriptionService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Upload, Sparkles, FileText, Plus, Trash2, ShieldCheck, CheckCircle2, Lock, Stethoscope, Eye, Terminal } from 'lucide-react';
+import { 
+  Upload, Sparkles, FileText, Plus, Trash2, ShieldCheck, CheckCircle2, 
+  Lock, Stethoscope, Eye, Terminal, AlertTriangle, AlertOctagon, XCircle, Ban
+} from 'lucide-react';
 import PrescriptionModal from '../components/PrescriptionModal';
 
 export default function DoctorDashboard() {
@@ -16,20 +19,31 @@ export default function DoctorDashboard() {
   const [ocrSuccess, setOcrSuccess] = useState(false);
   const [rawOcrText, setRawOcrText] = useState('');
   
-  const [patientName, setPatientName] = useState('Aarav Patel');
-  const [clinicName, setClinicName] = useState(user?.clinic || 'Apex Healthcare Specialty Clinic');
+  const [patientName, setPatientName] = useState('');
+  const [clinicName, setClinicName] = useState(user?.clinic || '');
   const [diagnosis, setDiagnosis] = useState('');
-  const [medications, setMedications] = useState([
-    { drug_name: 'Amoxicillin & Clavulanate', dosage: '625 mg', frequency: '1-0-1', duration: '5 days', instructions: 'Take after meals' }
-  ]);
+  const [medications, setMedications] = useState([]);
   
+  // TASK 8: Drug Interactions State
+  const [interactions, setInteractions] = useState([]);
+  const [checkingInteractions, setCheckingInteractions] = useState(false);
+
   const [issuing, setIssuing] = useState(false);
   const [issueResult, setIssueResult] = useState(null);
   const [activeModalId, setActiveModalId] = useState(null);
+  const [revokingId, setRevokingId] = useState(null);
 
   useEffect(() => {
     loadPrescriptions();
   }, []);
+
+  // Check interactions whenever medications change (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      runInteractionCheck();
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [medications]);
 
   const loadPrescriptions = async () => {
     try {
@@ -39,6 +53,23 @@ export default function DoctorDashboard() {
       console.error('Failed to load prescriptions:', err);
     } finally {
       setLoadingList(false);
+    }
+  };
+
+  const runInteractionCheck = async () => {
+    const validMeds = medications.filter(m => m.drug_name && m.drug_name.trim().length >= 2);
+    if (validMeds.length < 2) {
+      setInteractions([]);
+      return;
+    }
+    setCheckingInteractions(true);
+    try {
+      const res = await prescriptionService.checkInteractions(validMeds);
+      setInteractions(res.interactions || []);
+    } catch (err) {
+      console.warn('Drug interaction check failed:', err);
+    } finally {
+      setCheckingInteractions(false);
     }
   };
 
@@ -58,13 +89,14 @@ export default function DoctorDashboard() {
     setOcrSuccess(false);
     try {
       const res = await prescriptionService.uploadAndExtractOCR(selectedFile);
-      // Safe resolution across response shapes
       const parsed = res.data?.prescription_data || res.prescription_data || res.data?.data?.prescription_data;
       if (parsed) {
-        if (parsed.patient?.name && parsed.patient.name !== 'Patient') setPatientName(parsed.patient.name);
+        if (parsed.patient?.name) setPatientName(parsed.patient.name);
         if (parsed.doctor?.clinic) setClinicName(parsed.doctor.clinic);
         if (parsed.diagnosis) setDiagnosis(parsed.diagnosis);
-        if (parsed.medications && parsed.medications.length > 0) setMedications(parsed.medications);
+        if (parsed.medications && parsed.medications.length > 0) {
+          setMedications(parsed.medications);
+        }
         if (parsed.raw_text) setRawOcrText(parsed.raw_text);
         setOcrSuccess(true);
       }
@@ -78,7 +110,7 @@ export default function DoctorDashboard() {
   const addMedicationRow = () => {
     setMedications([
       ...medications,
-      { drug_name: '', dosage: '500 mg', frequency: '1-0-1', duration: '5 days', instructions: 'After food' }
+      { drug_name: '', dosage: '500 mg', frequency: '1-0-1', duration: '5 days', instructions: 'After food', confidence: 0.90 }
     ]);
   };
 
@@ -113,6 +145,47 @@ export default function DoctorDashboard() {
     }
   };
 
+  // TASK 7: Doctor Revokes Prescription
+  const handleRevoke = async (id) => {
+    if (!window.confirm("⚠️ REVOKE PRESCRIPTION: Are you sure you want to revoke this prescription? Pharmacists will be immediately blocked from dispensing it.")) {
+      return;
+    }
+    setRevokingId(id);
+    try {
+      await prescriptionService.revokePrescription(id);
+      alert("Prescription has been revoked. Revocation alert logged.");
+      loadPrescriptions();
+    } catch (err) {
+      alert("Revoke failed: " + (err.response?.data?.error || err.message));
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  // Helper for confidence badge colors
+  const getConfidenceBadge = (confidence) => {
+    const conf = typeof confidence === 'number' ? confidence : 0.88;
+    if (conf >= 0.85) {
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-500/40" title="High AI Confidence">
+          {(conf * 100).toFixed(0)}% AI Conf
+        </span>
+      );
+    } else if (conf >= 0.60) {
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-950/60 text-amber-400 border border-amber-500/40 flex items-center gap-1" title="Moderate Confidence">
+          <AlertTriangle className="w-3 h-3" /> {(conf * 100).toFixed(0)}%
+        </span>
+      );
+    } else {
+      return (
+        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-red-950/60 text-red-400 border border-red-500/40 flex items-center gap-1" title="Low Confidence - Verify Manually">
+          <AlertOctagon className="w-3 h-3" /> Verify manually ({(conf * 100).toFixed(0)}%)
+        </span>
+      );
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
@@ -124,12 +197,12 @@ export default function DoctorDashboard() {
           </span>
           <h1 className="text-2xl font-bold text-white">Prescription Issuance & Cryptographic Vault</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Upload paper slips for AI OCR extraction, verify drug details, and seal records with your RSA private key.
+            Upload paper slips for AI OCR extraction, verify drug details & interactions, and seal records with your RSA private key.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 text-slate-300">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>RSA-2048 Digital Signer: Active</span>
+          <span>RSA-2048 + ECDH-secp256k1: Active</span>
         </div>
       </div>
 
@@ -144,7 +217,7 @@ export default function DoctorDashboard() {
                 Upload Prescription Slip (AI OCR)
               </h2>
               <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40">
-                EasyOCR Vision Pipeline
+                EasyOCR + Confidence Engine
               </span>
             </div>
 
@@ -187,7 +260,7 @@ export default function DoctorDashboard() {
             {ocrSuccess && (
               <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>AI OCR Extracted entities successfully! Form updated below.</span>
+                <span>AI OCR Extracted entities successfully with confidence scores!</span>
               </div>
             )}
 
@@ -215,7 +288,7 @@ export default function DoctorDashboard() {
                 Clinical Details & Vault Encryption
               </h2>
               <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/40">
-                AES-256-GCM + SHA-256
+                AES-256-GCM + ECDH + SHA-256
               </span>
             </div>
 
@@ -225,6 +298,7 @@ export default function DoctorDashboard() {
                 <input
                   type="text"
                   required
+                  placeholder="e.g. Maya Sharma or Aarav Patel"
                   value={patientName}
                   onChange={(e) => setPatientName(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-slate-200"
@@ -236,6 +310,7 @@ export default function DoctorDashboard() {
                 <input
                   type="text"
                   required
+                  placeholder="e.g. Metropolitan General Hospital"
                   value={clinicName}
                   onChange={(e) => setClinicName(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-slate-200"
@@ -257,10 +332,38 @@ export default function DoctorDashboard() {
               />
             </div>
 
-            {/* Medications Table */}
+            {/* TASK 8: Drug-Drug Interaction Warning Banners */}
+            {interactions.length > 0 && (
+              <div className="space-y-2 p-3.5 bg-red-950/30 border border-red-500/40 rounded-xl text-xs">
+                <div className="flex items-center gap-2 font-bold text-red-400">
+                  <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 animate-pulse" />
+                  <span>Clinical Drug-Drug Interaction Alert ({interactions.length} Flagged)</span>
+                </div>
+                <div className="space-y-1.5 pt-1">
+                  {interactions.map((inter, i) => (
+                    <div key={i} className="p-2 rounded-lg bg-slate-950/70 border border-red-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                      <div>
+                        <span className="font-semibold text-slate-200">{inter.matched_rule}: </span>
+                        <span className="text-slate-300 text-[11px]">{inter.risk}</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase flex-shrink-0 ${
+                        inter.severity === 'HIGH' ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                      }`}>
+                        ⚠️ {inter.severity}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Medications Table with TASK 9 Confidence Scores */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-200">Prescribed Medications</span>
+                <div>
+                  <span className="text-xs font-semibold text-slate-200 block">Prescribed Medications</span>
+                  <span className="text-[10px] text-slate-400">AI-powered confidence scoring — review flagged items before signing</span>
+                </div>
                 <button
                   type="button"
                   onClick={addMedicationRow}
@@ -271,45 +374,58 @@ export default function DoctorDashboard() {
               </div>
 
               <div className="space-y-2">
-                {medications.map((m, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-xs items-center">
-                    <input
-                      type="text"
-                      placeholder="Drug Name"
-                      value={m.drug_name}
-                      onChange={(e) => updateMedication(idx, 'drug_name', e.target.value)}
-                      className="col-span-4 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Dosage"
-                      value={m.dosage}
-                      onChange={(e) => updateMedication(idx, 'dosage', e.target.value)}
-                      className="col-span-2 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Freq (e.g. 1-0-1)"
-                      value={m.frequency}
-                      onChange={(e) => updateMedication(idx, 'frequency', e.target.value)}
-                      className="col-span-2 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Duration"
-                      value={m.duration}
-                      onChange={(e) => updateMedication(idx, 'duration', e.target.value)}
-                      className="col-span-3 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeMedication(idx)}
-                      className="col-span-1 text-slate-500 hover:text-red-400 p-1 flex justify-center"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                {medications.length === 0 ? (
+                  <div className="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">
+                    No medications listed yet. Upload a slip on the left to extract via AI, or click <strong className="text-slate-400 font-medium">"+ Add Medication"</strong> to add manually.
                   </div>
-                ))}
+                ) : (
+                  medications.map((m, idx) => (
+                    <div key={idx} className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-xs">
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <input
+                          type="text"
+                          placeholder="Drug Name"
+                          value={m.drug_name}
+                          onChange={(e) => updateMedication(idx, 'drug_name', e.target.value)}
+                          className="col-span-4 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Dosage"
+                          value={m.dosage}
+                          onChange={(e) => updateMedication(idx, 'dosage', e.target.value)}
+                          className="col-span-2 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Freq (e.g. 1-0-1)"
+                          value={m.frequency}
+                          onChange={(e) => updateMedication(idx, 'frequency', e.target.value)}
+                          className="col-span-2 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Duration"
+                          value={m.duration}
+                          onChange={(e) => updateMedication(idx, 'duration', e.target.value)}
+                          className="col-span-3 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeMedication(idx)}
+                          className="col-span-1 text-slate-500 hover:text-red-400 p-1 flex justify-center"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 px-1 text-[11px]">
+                        <span className="text-slate-400 font-sans">Instructions: {m.instructions || 'As directed'}</span>
+                        {getConfidenceBadge(m.confidence)}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -319,7 +435,7 @@ export default function DoctorDashboard() {
               className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs shadow-xl shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {issuing ? (
-                <span>Sealing with Private Key...</span>
+                <span>Sealing with Private Key & Deriving ECDH Secret...</span>
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4" />
@@ -335,7 +451,10 @@ export default function DoctorDashboard() {
                   Prescription Cryptographically Sealed!
                 </p>
                 <p className="font-mono text-[10px] text-slate-400 break-all">
-                  SHA-256 Hash: {issueResult.dataHash}
+                  SHA-256 Fingerprint: {issueResult.dataHash}
+                </p>
+                <p className="font-mono text-[10px] text-cyan-400">
+                  Key Agreement Protocol: {issueResult.keyExchangeUsed || 'ECDH-secp256k1'}
                 </p>
               </div>
             )}
@@ -374,18 +493,35 @@ export default function DoctorDashboard() {
                     <td className="p-3 font-mono text-[10px] text-emerald-400">{p.dataHash.slice(0, 16)}...</td>
                     <td className="p-3">
                       <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                        p.status === 'DISPENSED' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
+                        p.status === 'REVOKED'
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          : p.status === 'DISPENSED' 
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                       }`}>
                         {p.status}
                       </span>
                     </td>
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-right space-x-2">
                       <button
                         onClick={() => setActiveModalId(p.id)}
                         className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors inline-flex items-center gap-1"
                       >
                         <Eye className="w-3.5 h-3.5" /> View & Decrypt
                       </button>
+
+                      {/* TASK 7: Doctor Revocation Button */}
+                      {p.status === 'ISSUED' && (
+                        <button
+                          onClick={() => handleRevoke(p.id)}
+                          disabled={revokingId === p.id}
+                          className="px-2.5 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-300 text-xs font-medium transition-colors inline-flex items-center gap-1"
+                          title="Revoke prescription so pharmacy cannot dispense it"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          {revokingId === p.id ? 'Revoking...' : 'Revoke'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

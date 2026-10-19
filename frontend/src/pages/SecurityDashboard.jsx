@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { securityService } from '../services/api';
-import { ShieldCheck, AlertTriangle, Activity, RefreshCw, Terminal, Radio, Zap, ShieldAlert, Bug, CheckCircle2 } from 'lucide-react';
+import { 
+  ShieldCheck, AlertTriangle, Activity, RefreshCw, Terminal, Radio, 
+  Zap, ShieldAlert, Bug, CheckCircle2, Link2, XCircle, CheckCircle 
+} from 'lucide-react';
 
 export default function SecurityDashboard() {
   const [alerts, setAlerts] = useState([]);
@@ -9,6 +12,10 @@ export default function SecurityDashboard() {
   const [activeTab, setActiveTab] = useState('alerts');
   const [simulating, setSimulating] = useState('');
   const [simMessage, setSimMessage] = useState(null);
+
+  // TASK 10: Audit Chain Verification State
+  const [chainResult, setChainResult] = useState(null);
+  const [verifyingChain, setVerifyingChain] = useState(false);
 
   useEffect(() => {
     fetchSecurityData();
@@ -28,6 +35,22 @@ export default function SecurityDashboard() {
       console.error('Failed to fetch security logs:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // TASK 10: Blockchain Hash Chain Verification
+  const handleVerifyAuditChain = async () => {
+    setVerifyingChain(true);
+    try {
+      const res = await securityService.verifyAuditChain();
+      setChainResult(res);
+    } catch (err) {
+      setChainResult({
+        chainValid: false,
+        error: err.response?.data?.error || err.message
+      });
+    } finally {
+      setVerifyingChain(false);
     }
   };
 
@@ -89,10 +112,19 @@ export default function SecurityDashboard() {
           </span>
           <h1 className="text-2xl font-bold text-white">Threat Intelligence & Attack Prevention</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Real-time monitoring engine protecting against double-fills, SQL tamper attacks, and bot bursts.
+            Real-time monitoring engine protecting against double-fills, SQL tamper attacks, rate bursts, and brute-force logins.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* TASK 10: Verify Audit Chain Button */}
+          <button
+            onClick={handleVerifyAuditChain}
+            disabled={verifyingChain}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20 transition-all disabled:opacity-50"
+          >
+            <Link2 className="w-3.5 h-3.5" />
+            <span>{verifyingChain ? 'Verifying...' : '🔗 Verify Audit Chain'}</span>
+          </button>
           <button
             onClick={fetchSecurityData}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-colors"
@@ -106,6 +138,38 @@ export default function SecurityDashboard() {
           </div>
         </div>
       </div>
+
+      {/* TASK 10: Audit Chain Verification Result Banner */}
+      {chainResult && (
+        <div className={`p-4 rounded-2xl border text-xs flex items-start gap-3 shadow-xl transition-all animate-in fade-in ${
+          chainResult.chainValid
+            ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
+            : 'bg-red-950/50 border-red-500/60 text-red-200'
+        }`}>
+          {chainResult.chainValid ? (
+            <CheckCircle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
+          ) : (
+            <XCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+          )}
+          <div className="space-y-1 flex-1">
+            <p className="font-bold text-sm">
+              {chainResult.chainValid
+                ? '✅ Cryptographic Audit Hash Chain: 100% Intact & Valid'
+                : '❌ Cryptographic Audit Hash Chain Compromised!'}
+            </p>
+            <p className="text-slate-300 text-xs">
+              {chainResult.chainValid
+                ? `All ${chainResult.totalEntries} audit entries from Genesis to current head verified cryptographically using recursive SHA-256 hash pointers.`
+                : `Integrity broken at entry index ${chainResult.brokenAtIndex}. ${chainResult.reason || chainResult.error}`}
+            </p>
+            {chainResult.latestHash && (
+              <p className="font-mono text-[10px] text-emerald-400 break-all">
+                Latest Chain Tip Hash: {chainResult.latestHash}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ⚡ Interactive Live Attack Sandbox (For Viva / Demo Presentation) */}
       <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-purple-950/30 border border-purple-500/30 shadow-2xl space-y-4">
@@ -201,13 +265,13 @@ export default function SecurityDashboard() {
         <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
           <span className="text-xs text-slate-400">Cryptographic Audits</span>
           <p className="text-2xl font-bold text-cyan-400 font-mono">{auditLogs.length}</p>
-          <span className="text-[10px] text-slate-500">Immutable access and issuance events</span>
+          <span className="text-[10px] text-slate-500">Immutable hash-chained events</span>
         </div>
 
         <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
           <span className="text-xs text-slate-400">Active Encryption Standard</span>
-          <p className="text-sm font-bold text-emerald-400 font-mono mt-1">AES-256-GCM + SHA-256</p>
-          <span className="text-[10px] text-slate-500">Authenticated encryption with 12-byte IV</span>
+          <p className="text-sm font-bold text-emerald-400 font-mono mt-1">AES-256-GCM + ECDH</p>
+          <span className="text-[10px] text-slate-500">Authenticated pairwise encryption</span>
         </div>
       </div>
 
@@ -234,7 +298,7 @@ export default function SecurityDashboard() {
           }`}
         >
           <Activity className="w-3.5 h-3.5" />
-          <span>Access Audit Trail ({auditLogs.length})</span>
+          <span>Blockchain Audit Chain ({auditLogs.length})</span>
         </button>
       </div>
 
@@ -287,23 +351,31 @@ export default function SecurityDashboard() {
         </div>
       )}
 
-      {/* Audit Trail View */}
+      {/* Audit Trail View with TASK 10 Hash Chain Links */}
       {activeTab === 'audits' && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-cyan-400" />
-            Cryptographic Vault Audit Trail
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-cyan-400" />
+              Cryptographic Blockchain Audit Trail (SHA-256 Linked)
+            </h2>
+            <button
+              onClick={handleVerifyAuditChain}
+              className="text-xs text-purple-400 hover:text-purple-300 font-mono flex items-center gap-1 font-semibold"
+            >
+              <Link2 className="w-3.5 h-3.5" /> Run Chain Integrity Verification
+            </button>
+          </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-800">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-950/80 text-slate-400 uppercase font-mono text-[10px]">
                 <tr>
                   <th className="p-3">Timestamp</th>
-                  <th className="p-3">Actor</th>
-                  <th className="p-3">Role</th>
+                  <th className="p-3">Actor / Role</th>
                   <th className="p-3">Action</th>
-                  <th className="p-3">IP Address</th>
+                  <th className="p-3">Previous Hash</th>
+                  <th className="p-3">Current Entry Hash</th>
                   <th className="p-3">Prescription Target</th>
                 </tr>
               </thead>
@@ -311,15 +383,20 @@ export default function SecurityDashboard() {
                 {auditLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-800/30">
                     <td className="p-3 text-slate-400 font-mono text-[10px]">{new Date(log.timestamp).toLocaleTimeString()}</td>
-                    <td className="p-3 font-semibold text-slate-200">{log.user?.name || 'Anonymous'}</td>
                     <td className="p-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300">
-                        {log.userRole}
-                      </span>
+                      <span className="font-semibold text-slate-200 block">{log.user?.name || 'Anonymous'}</span>
+                      <span className="text-[10px] font-mono text-slate-400">{log.userRole}</span>
                     </td>
                     <td className="p-3 font-mono text-emerald-400 text-[11px]">{log.action}</td>
-                    <td className="p-3 text-slate-400 font-mono text-[10px]">{log.ipAddress}</td>
-                    <td className="p-3 text-slate-300 text-[11px]">{log.prescription?.patientName || log.prescriptionId?.slice(0, 8)}</td>
+                    <td className="p-3 font-mono text-[10px] text-slate-500">
+                      {log.previousHash ? `${log.previousHash.slice(0, 10)}...` : 'GENESIS'}
+                    </td>
+                    <td className="p-3 font-mono text-[10px] text-cyan-400">
+                      {log.entryHash ? `${log.entryHash.slice(0, 10)}...` : 'Unchained'}
+                    </td>
+                    <td className="p-3 text-slate-300 text-[11px]">
+                      {log.prescription?.patientName || log.prescriptionId?.slice(0, 8)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

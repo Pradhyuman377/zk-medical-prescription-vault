@@ -24,6 +24,14 @@ router.post(
   PrescriptionController.uploadAndExtractOCR
 );
 
+// TASK 8: Drug-Drug Interaction Checker endpoint
+router.post(
+  '/check-interactions',
+  authenticate,
+  authorizeRoles('DOCTOR', 'PHARMACIST'),
+  PrescriptionController.checkInteractions
+);
+
 // 2. Issue and Cryptographically Seal Prescription (Strictly DOCTOR role)
 router.post(
   '/issue',
@@ -37,6 +45,28 @@ router.get(
   '/',
   authenticate,
   PrescriptionController.listPrescriptions
+);
+
+// TASK 11: Verify QR Code
+router.post(
+  '/verify-qr',
+  authenticate,
+  PrescriptionController.verifyQRCode
+);
+
+// TASK 11: Generate QR Code for Patient Prescription Sharing
+router.get(
+  '/:id/qr',
+  authenticate,
+  PrescriptionController.getPrescriptionQR
+);
+
+// TASK 7: Doctor Revokes Prescription
+router.post(
+  '/:id/revoke',
+  authenticate,
+  authorizeRoles('DOCTOR'),
+  PrescriptionController.revokePrescription
 );
 
 // 4. View Prescription with Selective Disclosure (Any authenticated role with proper filtering)

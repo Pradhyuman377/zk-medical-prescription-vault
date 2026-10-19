@@ -9,19 +9,25 @@ from preprocessor import ImagePreprocessor
 from ocr_engine import OCREngine
 from parser import PrescriptionParser
 from vlm_engine import VLMEngine
+from drug_interactions import check_interactions
 
 app = FastAPI(
     title="Zero-Knowledge Prescription Vault - Multimodal AI/VLM Microservice",
-    description="Multimodal Vision-Language Model (Gemini Flash) + EasyOCR for handwritten medical prescription HTR.",
-    version="2.0.0"
+    description="Multimodal Vision-Language Model (Gemini Flash) + EasyOCR for handwritten medical prescription HTR with Drug Interaction Analysis.",
+    version="2.1.0"
 )
 
-# Enable CORS for local dev
+# Hardened CORS: Restrict exclusively to Frontend and Backend origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -36,6 +42,9 @@ class HealthResponse(BaseModel):
     ocr_backend: str
     timestamp: float
 
+class InteractionRequest(BaseModel):
+    medications: List[Any]
+
 @app.get("/health", response_model=HealthResponse)
 def health_check():
     return {
@@ -46,12 +55,26 @@ def health_check():
         "timestamp": time.time()
     }
 
+@app.post("/api/interactions/check")
+def api_check_interactions(req: InteractionRequest):
+    """
+    TASK 8: Clinical Drug-Drug Interaction Checker.
+    Identifies hazardous adverse interactions across prescribed medicines.
+    """
+    flagged = check_interactions(req.medications)
+    return {
+        "success": True,
+        "medications_analyzed": len(req.medications),
+        "flagged_count": len(flagged),
+        "interactions": flagged
+    }
+
 @app.post("/api/ocr/extract")
 async def extract_prescription(file: UploadFile = File(...)) -> Dict[str, Any]:
     """
     Accepts an uploaded prescription image:
-    1. If VLM (Gemini Flash) is configured, uses multimodal Vision AI for near-human handwriting extraction.
-    2. Fallback to EasyOCR deep learning pipeline + OpenCV image preprocessing.
+    1. If VLM (Gemini Flash) is configured, uses multimodal Vision AI for handwriting extraction.
+    2. Fallback to EasyOCR deep learning pipeline (detail=1) + OpenCV image preprocessing + Confidence Scoring.
     """
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Uploaded file must be an image.")
@@ -64,6 +87,10 @@ async def extract_prescription(file: UploadFile = File(...)) -> Dict[str, Any]:
         if vlm_engine.is_configured:
             vlm_result = vlm_engine.extract_with_vision(image_bytes)
             if vlm_result and vlm_result.get("medications"):
+                # Ensure confidence scores present on medications
+                for m in vlm_result.get("medications", []):
+                    if "confidence" not in m:
+                        m["confidence"] = 0.96
                 elapsed = round(time.time() - start_time, 3)
                 return {
                     "success": True,
@@ -79,8 +106,9 @@ async def extract_prescription(file: UploadFile = File(...)) -> Dict[str, Any]:
         except Exception:
             processed_matrix = None
 
-        raw_text = ocr_engine.extract_text(processed_matrix, image_bytes)
-        parsed_data = PrescriptionParser.parse(raw_text)
+        # TASK 9: Detail=1 OCR text extraction with per-segment confidence
+        raw_text, segments = ocr_engine.extract_text(processed_matrix, image_bytes)
+        parsed_data = PrescriptionParser.parse(raw_text, segments)
         elapsed = round(time.time() - start_time, 3)
 
         return {

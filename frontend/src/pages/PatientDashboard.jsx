@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { prescriptionService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Lock, ShieldCheck, Eye, Copy, Check, QrCode, FileText, Pill, Calendar, Building } from 'lucide-react';
+import { Lock, ShieldCheck, Eye, Copy, Check, QrCode, FileText, Pill, Calendar, Building, X, Sparkles } from 'lucide-react';
 import PrescriptionModal from '../components/PrescriptionModal';
 
 export default function PatientDashboard() {
@@ -10,6 +10,11 @@ export default function PatientDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeModalId, setActiveModalId] = useState(null);
   const [copiedId, setCopiedId] = useState('');
+  
+  // TASK 11: QR Code Modal State
+  const [qrModalData, setQrModalData] = useState(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrCopied, setQrCopied] = useState(false);
 
   useEffect(() => {
     loadPrescriptions();
@@ -32,6 +37,32 @@ export default function PatientDashboard() {
     setTimeout(() => setCopiedId(''), 3000);
   };
 
+  // TASK 11: Open QR Code modal
+  const handleShowQR = async (id) => {
+    setQrLoading(true);
+    setQrCopied(false);
+    try {
+      const res = await prescriptionService.getPrescriptionQR(id);
+      setQrModalData(res);
+    } catch (err) {
+      alert('Failed to generate prescription QR code: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const handleCopyQRPayload = () => {
+    if (!qrModalData) return;
+    const payload = JSON.stringify({
+      prescriptionId: qrModalData.prescriptionId,
+      hmac: qrModalData.hmac,
+      protocol: 'ZK-RX-QR-v1'
+    });
+    navigator.clipboard.writeText(payload);
+    setQrCopied(true);
+    setTimeout(() => setQrCopied(false), 3000);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
@@ -43,7 +74,7 @@ export default function PatientDashboard() {
           </span>
           <h1 className="text-2xl font-bold text-white">Encrypted Prescription Portfolio</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Welcome back, {user?.name}. Your medical records are encrypted with AES-256-GCM. Share your Dispense ID with any pharmacy safely.
+            Welcome back, {user?.name}. Your medical records are encrypted with AES-256-GCM + pairwise ECDH. Share your Dispense ID or QR token with any pharmacy safely.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 text-slate-300">
@@ -57,7 +88,7 @@ export default function PatientDashboard() {
         <QrCode className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
         <div>
           <span className="font-semibold text-slate-100">How Pharmacy Sharing Works: </span>
-          When you present your Prescription ID to a pharmacist, our system uses <span className="text-emerald-400 font-semibold">Selective Disclosure</span>. The pharmacist can verify the doctor's signature and dispense medications, but your confidential clinical diagnosis remains completely encrypted and hidden from them.
+          When you present your Prescription ID or <span className="text-emerald-400 font-semibold">HMAC-signed QR Code</span> to a pharmacist, our system uses <span className="text-emerald-400 font-semibold">Selective Disclosure</span>. The pharmacist can verify the doctor's signature and dispense medications, but your confidential clinical diagnosis remains completely encrypted and hidden from them.
         </div>
       </div>
 
@@ -91,9 +122,11 @@ export default function PatientDashboard() {
                     </p>
                   </div>
                   <span className={`px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                    p.status === 'DISPENSED' 
-                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
-                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    p.status === 'REVOKED'
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      : p.status === 'DISPENSED' 
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+                        : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                   }`}>
                     {p.status}
                   </span>
@@ -125,20 +158,74 @@ export default function PatientDashboard() {
                   </button>
                 </div>
 
-                <button
-                  onClick={() => setActiveModalId(p.id)}
-                  className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  View & Decrypt Full eRx
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* TASK 11: Show QR Code button */}
+                  <button
+                    onClick={() => handleShowQR(p.id)}
+                    className="py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Show QR</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveModalId(p.id)}
+                    className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Decrypt</span>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Modal */}
+      {/* TASK 11: QR Code Modal */}
+      {qrModalData && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 space-y-4 text-center shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                <QrCode className="w-4 h-4" />
+                <span>e-Prescription QR Token</span>
+              </div>
+              <button
+                onClick={() => setQrModalData(null)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl inline-block mx-auto shadow-inner">
+              <img
+                src={qrModalData.qrImage}
+                alt="Prescription QR Code"
+                className="w-48 h-48 mx-auto object-contain"
+              />
+            </div>
+
+            <div className="space-y-1 text-xs">
+              <p className="text-slate-200 font-medium">{qrModalData.instructions}</p>
+              <p className="text-[10px] text-slate-400 font-mono break-all">
+                HMAC-SHA256: {qrModalData.hmac?.slice(0, 24)}...
+              </p>
+            </div>
+
+            <button
+              onClick={handleCopyQRPayload}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 border border-slate-700 transition-colors"
+            >
+              {qrCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-400" />}
+              <span>{qrCopied ? 'Copied QR Payload to Clipboard!' : 'Copy Scannable QR Payload'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Prescription Full Decrypt Modal */}
       {activeModalId && (
         <PrescriptionModal
           prescriptionId={activeModalId}

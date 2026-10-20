@@ -3,9 +3,12 @@ import { prescriptionService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Lock, ShieldCheck, Eye, Copy, Check, QrCode, FileText, Pill, Calendar, Building, X, Sparkles } from 'lucide-react';
 import PrescriptionModal from '../components/PrescriptionModal';
+import { useToast } from '../context/ToastContext';
+import { SkeletonCard } from '../components/SkeletonLoader';
 
 export default function PatientDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeModalId, setActiveModalId] = useState(null);
@@ -34,6 +37,7 @@ export default function PatientDashboard() {
   const handleCopy = (id) => {
     navigator.clipboard.writeText(id);
     setCopiedId(id);
+    toast.info('Dispense ID Copied', 'Prescription ID copied to clipboard. Share this with your pharmacist.');
     setTimeout(() => setCopiedId(''), 3000);
   };
 
@@ -45,7 +49,8 @@ export default function PatientDashboard() {
       const res = await prescriptionService.getPrescriptionQR(id);
       setQrModalData(res);
     } catch (err) {
-      alert('Failed to generate prescription QR code: ' + (err.response?.data?.error || err.message));
+      const msg = err.response?.data?.error || err.message;
+      toast.error('QR Generation Failed', msg);
     } finally {
       setQrLoading(false);
     }
@@ -60,6 +65,7 @@ export default function PatientDashboard() {
     });
     navigator.clipboard.writeText(payload);
     setQrCopied(true);
+    toast.success('HMAC Payload Copied', 'Cryptographic verification token copied to clipboard.');
     setTimeout(() => setQrCopied(false), 3000);
   };
 
@@ -100,7 +106,7 @@ export default function PatientDashboard() {
         </h2>
 
         {loading ? (
-          <p className="text-xs text-slate-400">Querying cryptographic vault...</p>
+          <SkeletonCard count={3} />
         ) : prescriptions.length === 0 ? (
           <div className="text-center py-12 space-y-2">
             <Lock className="w-8 h-8 text-slate-600 mx-auto" />

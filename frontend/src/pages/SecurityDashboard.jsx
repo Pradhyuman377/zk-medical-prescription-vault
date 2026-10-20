@@ -4,8 +4,11 @@ import {
   ShieldCheck, AlertTriangle, Activity, RefreshCw, Terminal, Radio, 
   Zap, ShieldAlert, Bug, CheckCircle2, Link2, XCircle, CheckCircle 
 } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import { SkeletonTable } from '../components/SkeletonLoader';
 
 export default function SecurityDashboard() {
+  const { toast } = useToast();
   const [alerts, setAlerts] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,7 +22,12 @@ export default function SecurityDashboard() {
 
   useEffect(() => {
     fetchSecurityData();
-    const interval = setInterval(fetchSecurityData, 4000); // Poll every 4s for live attack monitoring
+    // Poll every 12s for live attack monitoring, only when tab is visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchSecurityData();
+      }
+    }, 12000);
     return () => clearInterval(interval);
   }, []);
 
@@ -44,11 +52,18 @@ export default function SecurityDashboard() {
     try {
       const res = await securityService.verifyAuditChain();
       setChainResult(res);
+      if (res.chainValid) {
+        toast.success('Audit Chain Verified', `All ${res.totalBlocks || ''} audit blocks verified against cryptographic hash chain.`);
+      } else {
+        toast.error('Audit Chain Broken', res.error || 'Cryptographic hash mismatch in audit chain.');
+      }
     } catch (err) {
+      const msg = err.response?.data?.error || err.message;
       setChainResult({
         chainValid: false,
-        error: err.response?.data?.error || err.message
+        error: msg
       });
+      toast.error('Verification Error', msg);
     } finally {
       setVerifyingChain(false);
     }
@@ -310,11 +325,11 @@ export default function SecurityDashboard() {
               <AlertTriangle className="w-4 h-4 text-amber-400" />
               Real-Time Security & Replay Alerts
             </h2>
-            <span className="text-xs text-slate-500 font-mono">Auto-refreshes every 4s</span>
+            <span className="text-xs text-slate-500 font-mono">Live Watchdog (12s cadence • Tab-aware)</span>
           </div>
 
           {loading ? (
-            <p className="text-xs text-slate-400">Scanning logs...</p>
+            <SkeletonTable rows={3} />
           ) : alerts.length === 0 ? (
             <div className="p-8 text-center space-y-2">
               <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto" />

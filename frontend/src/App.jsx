@@ -1,12 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import DoctorDashboard from './pages/DoctorDashboard';
-import PatientDashboard from './pages/PatientDashboard';
-import PharmacistDashboard from './pages/PharmacistDashboard';
-import SecurityDashboard from './pages/SecurityDashboard';
+
+// Code-split pages for optimized bundle size & fast mobile loading
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DoctorDashboard = lazy(() => import('./pages/DoctorDashboard'));
+const PatientDashboard = lazy(() => import('./pages/PatientDashboard'));
+const PharmacistDashboard = lazy(() => import('./pages/PharmacistDashboard'));
+const SecurityDashboard = lazy(() => import('./pages/SecurityDashboard'));
+
+function PageLoader() {
+  return (
+    <div className="flex flex-col items-center justify-center py-28 space-y-3">
+      <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-xs text-slate-400 font-mono tracking-wider">Accessing Vault Module...</p>
+    </div>
+  );
+}
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -42,7 +53,9 @@ export default function App() {
             onToggleLogin={() => setShowLogin(true)}
             showLogin={false}
           />
-          <LandingPage onGetStarted={() => setShowLogin(true)} />
+          <Suspense fallback={<PageLoader />}>
+            <LandingPage onGetStarted={() => setShowLogin(true)} />
+          </Suspense>
         </div>
       );
     }
@@ -56,7 +69,9 @@ export default function App() {
           onToggleLogin={() => setShowLogin(false)}
           showLogin={true}
         />
-        <LoginPage onBack={() => setShowLogin(false)} />
+        <Suspense fallback={<PageLoader />}>
+          <LoginPage onBack={() => setShowLogin(false)} />
+        </Suspense>
       </div>
     );
   }
@@ -65,10 +80,12 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-white">
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
       <main className="pb-16">
-        {activeTab === 'doctor' && <DoctorDashboard />}
-        {activeTab === 'patient' && <PatientDashboard />}
-        {activeTab === 'pharmacist' && <PharmacistDashboard />}
-        {activeTab === 'security' && <SecurityDashboard />}
+        <Suspense fallback={<PageLoader />}>
+          {activeTab === 'doctor' && <DoctorDashboard />}
+          {activeTab === 'patient' && <PatientDashboard />}
+          {activeTab === 'pharmacist' && <PharmacistDashboard />}
+          {activeTab === 'security' && <SecurityDashboard />}
+        </Suspense>
       </main>
     </div>
   );

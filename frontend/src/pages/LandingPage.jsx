@@ -413,28 +413,40 @@ export default function LandingPage({ onGetStarted }) {
               { 
                 title: 'Frontend', port: ':5173',
                 items: ['React 18 + Vite 5', 'Tailwind CSS', 'Lucide Icons', 'Axios + JWT Auth'],
-                color: 'blue'
+                hoverBorder: 'hover:border-blue-500/30',
+                badgeText: 'text-blue-400',
+                badgeBg: 'bg-blue-500/10',
+                badgeBorder: 'border-blue-500/20',
+                iconColor: 'text-blue-500'
               },
               { 
                 title: 'Backend & Crypto Engine', port: ':5000',
                 items: ['Node.js + Express', 'Prisma ORM + SQLite', 'Native Node crypto (AES, RSA, SHA)', 'JWT + bcrypt + RBAC'],
-                color: 'emerald'
+                hoverBorder: 'hover:border-emerald-500/30',
+                badgeText: 'text-emerald-400',
+                badgeBg: 'bg-emerald-500/10',
+                badgeBorder: 'border-emerald-500/20',
+                iconColor: 'text-emerald-500'
               },
               { 
                 title: 'AI / OCR Microservice', port: ':8000',
                 items: ['Python FastAPI + Uvicorn', 'EasyOCR (PyTorch CRAFT + CRNN)', 'OpenCV Image Processing', 'Medical Entity Parser'],
-                color: 'amber'
+                hoverBorder: 'hover:border-amber-500/30',
+                badgeText: 'text-amber-400',
+                badgeBg: 'bg-amber-500/10',
+                badgeBorder: 'border-amber-500/20',
+                iconColor: 'text-amber-500'
               }
             ].map((stack, i) => (
-              <div key={i} className={`p-6 rounded-2xl bg-slate-900/50 border border-slate-800 hover:border-${stack.color}-500/30 transition-colors space-y-4`}>
+              <div key={i} className={`p-6 rounded-2xl bg-slate-900/50 border border-slate-800 ${stack.hoverBorder} transition-colors space-y-4`}>
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-white text-sm">{stack.title}</h3>
-                  <span className={`text-[10px] font-mono text-${stack.color}-400 bg-${stack.color}-500/10 px-2 py-0.5 rounded-full border border-${stack.color}-500/20`}>{stack.port}</span>
+                  <span className={`text-[10px] font-mono ${stack.badgeText} ${stack.badgeBg} px-2 py-0.5 rounded-full border ${stack.badgeBorder}`}>{stack.port}</span>
                 </div>
                 <ul className="space-y-2">
                   {stack.items.map((item, j) => (
                     <li key={j} className="flex items-center gap-2 text-xs text-slate-300">
-                      <CheckCircle className={`w-3 h-3 text-${stack.color}-500 flex-shrink-0`} />
+                      <CheckCircle className={`w-3 h-3 ${stack.iconColor} flex-shrink-0`} />
                       {item}
                     </li>
                   ))}

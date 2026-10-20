@@ -3,9 +3,12 @@ import { prescriptionService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Pill, Search, ShieldCheck, CheckCircle2, AlertTriangle, Eye, Lock, ArrowRight, QrCode, ShieldAlert, Ban } from 'lucide-react';
 import PrescriptionModal from '../components/PrescriptionModal';
+import { useToast } from '../context/ToastContext';
+import { SkeletonTable } from '../components/SkeletonLoader';
 
 export default function PharmacistDashboard() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [prescriptions, setPrescriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchId, setSearchId] = useState('');
@@ -49,12 +52,16 @@ export default function PharmacistDashboard() {
       const res = await prescriptionService.verifyQRCode({ rawPayload: qrInput.trim() });
       if (res.prescription?.id) {
         setActiveModalId(res.prescription.id);
+        toast.success('HMAC QR Validated', `Prescription for ${res.prescription.patientName} verified.`);
         setQrInput('');
       } else {
         setQrError('Could not resolve prescription from QR payload.');
+        toast.error('Verification Error', 'Could not resolve prescription from QR payload.');
       }
     } catch (err) {
-      setQrError(err.response?.data?.error || 'QR Verification failed: Invalid cryptographic signature.');
+      const msg = err.response?.data?.error || 'QR Verification failed: Invalid cryptographic signature.';
+      setQrError(msg);
+      toast.error('Invalid QR Signature', msg);
     } finally {
       setQrVerifying(false);
     }
@@ -147,63 +154,109 @@ export default function PharmacistDashboard() {
         </div>
 
         {loading ? (
-          <p className="text-xs text-slate-400">Loading prescriptions...</p>
+          <SkeletonTable rows={3} />
         ) : prescriptions.length === 0 ? (
           <p className="text-xs text-slate-500">No prescriptions found in system.</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-800">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950/80 text-slate-400 uppercase font-mono text-[10px]">
-                <tr>
-                  <th className="p-3">Prescription ID</th>
-                  <th className="p-3">Patient</th>
-                  <th className="p-3">Doctor</th>
-                  <th className="p-3">Date</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 bg-slate-900/40">
-                {prescriptions.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-800/30">
-                    <td className="p-3 font-mono text-[11px] text-slate-400">{p.id.slice(0, 16)}...</td>
-                    <td className="p-3 font-semibold text-slate-200">{p.patientName}</td>
-                    <td className="p-3 text-slate-300">{p.doctorName}</td>
-                    <td className="p-3 text-slate-400">{p.dateIssued}</td>
-                    <td className="p-3">
-                      {/* TASK 7: Revocation Badge for Pharmacists */}
-                      {p.status === 'REVOKED' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded font-bold uppercase text-[10px] bg-red-500/20 text-red-400 border border-red-500/40">
-                          <Ban className="w-3 h-3" /> REVOKED — DO NOT DISPENSE
-                        </span>
-                      ) : (
-                        <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                          p.status === 'DISPENSED' 
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
-                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        }`}>
-                          {p.status}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-right">
-                      <button
-                        onClick={() => setActiveModalId(p.id)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
-                          p.status === 'REVOKED'
-                            ? 'bg-red-950/30 hover:bg-red-900/50 border border-red-500/30 text-red-300'
-                            : 'bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300'
-                        }`}
-                      >
-                        <Eye className="w-3.5 h-3.5" /> 
-                        {p.status === 'REVOKED' ? 'View Revocation' : 'Verify & Dispense'}
-                      </button>
-                    </td>
+          <>
+            {/* Mobile Cards View */}
+            <div className="md:hidden space-y-3">
+              {prescriptions.map((p) => (
+                <div key={p.id} className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-semibold text-slate-200 text-sm">{p.patientName}</div>
+                      <div className="text-[11px] text-slate-400">Dr. {p.doctorName} • {p.dateIssued}</div>
+                    </div>
+                    {p.status === 'REVOKED' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold uppercase text-[9px] bg-red-500/20 text-red-400 border border-red-500/40">
+                        <Ban className="w-3 h-3" /> REVOKED
+                      </span>
+                    ) : (
+                      <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                        p.status === 'DISPENSED' 
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+                          : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      }`}>
+                        {p.status}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-[10px] font-mono text-slate-400 bg-slate-900/80 px-2.5 py-1 rounded border border-slate-800 truncate">
+                    <span className="text-slate-500">ID: </span>{p.id}
+                  </div>
+
+                  <button
+                    onClick={() => setActiveModalId(p.id)}
+                    className={`w-full py-2 px-3 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                      p.status === 'REVOKED'
+                        ? 'bg-red-950/30 hover:bg-red-900/50 border border-red-500/30 text-red-300'
+                        : 'bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" /> 
+                    {p.status === 'REVOKED' ? 'View Revocation Details' : 'Verify Cryptography & Dispense'}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-800">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950/80 text-slate-400 uppercase font-mono text-[10px]">
+                  <tr>
+                    <th className="p-3">Prescription ID</th>
+                    <th className="p-3">Patient</th>
+                    <th className="p-3">Doctor</th>
+                    <th className="p-3">Date</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 bg-slate-900/40">
+                  {prescriptions.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-800/30">
+                      <td className="p-3 font-mono text-[11px] text-slate-400">{p.id.slice(0, 16)}...</td>
+                      <td className="p-3 font-semibold text-slate-200">{p.patientName}</td>
+                      <td className="p-3 text-slate-300">{p.doctorName}</td>
+                      <td className="p-3 text-slate-400">{p.dateIssued}</td>
+                      <td className="p-3">
+                        {/* TASK 7: Revocation Badge for Pharmacists */}
+                        {p.status === 'REVOKED' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded font-bold uppercase text-[10px] bg-red-500/20 text-red-400 border border-red-500/40">
+                            <Ban className="w-3 h-3" /> REVOKED — DO NOT DISPENSE
+                          </span>
+                        ) : (
+                          <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                            p.status === 'DISPENSED' 
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+                              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          }`}>
+                            {p.status}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right">
+                        <button
+                          onClick={() => setActiveModalId(p.id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
+                            p.status === 'REVOKED'
+                              ? 'bg-red-950/30 hover:bg-red-900/50 border border-red-500/30 text-red-300'
+                              : 'bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/30 text-amber-300'
+                          }`}
+                        >
+                          <Eye className="w-3.5 h-3.5" /> 
+                          {p.status === 'REVOKED' ? 'View Revocation' : 'Verify & Dispense'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

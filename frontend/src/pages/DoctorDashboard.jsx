@@ -6,9 +6,12 @@ import {
   Lock, Stethoscope, Eye, Terminal, AlertTriangle, AlertOctagon, XCircle, Ban
 } from 'lucide-react';
 import PrescriptionModal from '../components/PrescriptionModal';
+import { useToast } from '../context/ToastContext';
+import { SkeletonTable } from '../components/SkeletonLoader';
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
+  const { toast, confirm } = useToast();
   const [prescriptions, setPrescriptions] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   
@@ -37,11 +40,11 @@ export default function DoctorDashboard() {
     loadPrescriptions();
   }, []);
 
-  // Check interactions whenever medications change (debounced)
+  // Check interactions whenever medications change (debounced to prevent API spam)
   useEffect(() => {
     const timer = setTimeout(() => {
       runInteractionCheck();
-    }, 400);
+    }, 800);
     return () => clearTimeout(timer);
   }, [medications]);
 
@@ -57,7 +60,7 @@ export default function DoctorDashboard() {
   };
 
   const runInteractionCheck = async () => {
-    const validMeds = medications.filter(m => m.drug_name && m.drug_name.trim().length >= 2);
+    const validMeds = medications.filter(m => m.drug_name && m.drug_name.trim().length >= 3);
     if (validMeds.length < 2) {
       setInteractions([]);
       return;
@@ -76,6 +79,9 @@ export default function DoctorDashboard() {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (filePreview) {
+        URL.revokeObjectURL(filePreview);
+      }
       setSelectedFile(file);
       setFilePreview(URL.createObjectURL(file));
       setOcrSuccess(false);
@@ -99,9 +105,11 @@ export default function DoctorDashboard() {
         }
         if (parsed.raw_text) setRawOcrText(parsed.raw_text);
         setOcrSuccess(true);
+        toast.success('Prescription Extracted', 'AI identified patient, clinic, diagnosis, and dosage regimen.');
       }
     } catch (err) {
-      alert('OCR Pipeline Error: ' + (err.response?.data?.error || err.message));
+      const msg = err.response?.data?.error || err.message;
+      toast.error('OCR Extraction Failed', msg);
     } finally {
       setOcrLoading(false);
     }
@@ -137,9 +145,11 @@ export default function DoctorDashboard() {
       };
       const res = await prescriptionService.issuePrescription(payload);
       setIssueResult(res);
+      toast.success('e-Prescription Sealed', `Prescription for ${patientName} cryptographically anchored with RSA-2048.`);
       loadPrescriptions();
     } catch (err) {
-      alert('Issue Error: ' + (err.response?.data?.error || err.message));
+      const msg = err.response?.data?.error || err.message;
+      toast.error('Issuance Failed', msg);
     } finally {
       setIssuing(false);
     }
@@ -147,16 +157,22 @@ export default function DoctorDashboard() {
 
   // TASK 7: Doctor Revokes Prescription
   const handleRevoke = async (id) => {
-    if (!window.confirm("⚠️ REVOKE PRESCRIPTION: Are you sure you want to revoke this prescription? Pharmacists will be immediately blocked from dispensing it.")) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Revoke e-Prescription?',
+      message: 'Are you sure you want to revoke this prescription? Pharmacists will be immediately blocked from dispensing it and an alert will be logged to the security audit trail.',
+      confirmText: 'Revoke Prescription',
+      type: 'danger'
+    });
+    if (!ok) return;
+
     setRevokingId(id);
     try {
       await prescriptionService.revokePrescription(id);
-      alert("Prescription has been revoked. Revocation alert logged.");
+      toast.warning('Prescription Revoked', 'Status changed to REVOKED. Dispense actions now blocked.');
       loadPrescriptions();
     } catch (err) {
-      alert("Revoke failed: " + (err.response?.data?.error || err.message));
+      const msg = err.response?.data?.error || err.message;
+      toast.error('Revoke Failed', msg);
     } finally {
       setRevokingId(null);
     }
@@ -319,7 +335,7 @@ export default function DoctorDashboard() {
             </div>
 
             <div className="text-xs">
-              <label className="text-slate-300 block mb-1 font-medium flex items-center justify-between">
+              <label className="text-slate-300 block mb-1 font-medium flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                 <span>Confidential Clinical Diagnosis</span>
                 <span className="text-[10px] text-amber-400 font-mono">Protected by Selective Disclosure (Pharmacist cannot see this)</span>
               </label>
@@ -380,46 +396,51 @@ export default function DoctorDashboard() {
                   </div>
                 ) : (
                   medications.map((m, idx) => (
-                    <div key={idx} className="space-y-1 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-xs">
-                      <div className="grid grid-cols-12 gap-2 items-center">
+                    <div key={idx} className="space-y-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                         <input
                           type="text"
-                          placeholder="Drug Name"
+                          placeholder="Drug Name (e.g. Amoxicillin)"
                           value={m.drug_name}
                           onChange={(e) => updateMedication(idx, 'drug_name', e.target.value)}
-                          className="col-span-4 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
+                          className="sm:col-span-4 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-emerald-500"
                         />
-                        <input
-                          type="text"
-                          placeholder="Dosage"
-                          value={m.dosage}
-                          onChange={(e) => updateMedication(idx, 'dosage', e.target.value)}
-                          className="col-span-2 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Freq (e.g. 1-0-1)"
-                          value={m.frequency}
-                          onChange={(e) => updateMedication(idx, 'frequency', e.target.value)}
-                          className="col-span-2 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Duration"
-                          value={m.duration}
-                          onChange={(e) => updateMedication(idx, 'duration', e.target.value)}
-                          className="col-span-3 px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeMedication(idx)}
-                          className="col-span-1 text-slate-500 hover:text-red-400 p-1 flex justify-center"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="grid grid-cols-3 sm:col-span-7 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Dosage"
+                            value={m.dosage}
+                            onChange={(e) => updateMedication(idx, 'dosage', e.target.value)}
+                            className="px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-emerald-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Freq (1-0-1)"
+                            value={m.frequency}
+                            onChange={(e) => updateMedication(idx, 'frequency', e.target.value)}
+                            className="px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-emerald-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Duration"
+                            value={m.duration}
+                            onChange={(e) => updateMedication(idx, 'duration', e.target.value)}
+                            className="px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                        <div className="flex sm:col-span-1 justify-end sm:justify-center">
+                          <button
+                            type="button"
+                            onClick={() => removeMedication(idx)}
+                            className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                            title="Remove medication"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-1 px-1 text-[11px]">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-1 px-1 text-[11px] gap-1">
                         <span className="text-slate-400 font-sans">Instructions: {m.instructions || 'As directed'}</span>
                         {getConfidenceBadge(m.confidence)}
                       </div>
@@ -470,64 +491,116 @@ export default function DoctorDashboard() {
         </h2>
 
         {loadingList ? (
-          <p className="text-xs text-slate-400">Loading vault records...</p>
+          <SkeletonTable rows={3} />
         ) : prescriptions.length === 0 ? (
           <p className="text-xs text-slate-500">No prescriptions issued yet. Use the form above to seal your first eRx.</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-800">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950/80 text-slate-400 uppercase font-mono text-[10px]">
-                <tr>
-                  <th className="p-3">Patient</th>
-                  <th className="p-3">Issued Date</th>
-                  <th className="p-3">Tamper Hash (SHA-256)</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 bg-slate-900/40">
-                {prescriptions.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-800/30">
-                    <td className="p-3 font-semibold text-slate-200">{p.patientName}</td>
-                    <td className="p-3 text-slate-400">{p.dateIssued}</td>
-                    <td className="p-3 font-mono text-[10px] text-emerald-400">{p.dataHash.slice(0, 16)}...</td>
-                    <td className="p-3">
-                      <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
-                        p.status === 'REVOKED'
-                          ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                          : p.status === 'DISPENSED' 
-                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
-                            : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      }`}>
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right space-x-2">
-                      <button
-                        onClick={() => setActiveModalId(p.id)}
-                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors inline-flex items-center gap-1"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> View & Decrypt
-                      </button>
+          <>
+            {/* Mobile Cards View */}
+            <div className="md:hidden space-y-3">
+              {prescriptions.map((p) => (
+                <div key={p.id} className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-semibold text-slate-200 text-sm">{p.patientName}</div>
+                      <div className="text-[11px] text-slate-400">{p.dateIssued}</div>
+                    </div>
+                    <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                      p.status === 'REVOKED'
+                        ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        : p.status === 'DISPENSED' 
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+                          : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    }`}>
+                      {p.status}
+                    </span>
+                  </div>
 
-                      {/* TASK 7: Doctor Revocation Button */}
-                      {p.status === 'ISSUED' && (
-                        <button
-                          onClick={() => handleRevoke(p.id)}
-                          disabled={revokingId === p.id}
-                          className="px-2.5 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-300 text-xs font-medium transition-colors inline-flex items-center gap-1"
-                          title="Revoke prescription so pharmacy cannot dispense it"
-                        >
-                          <Ban className="w-3.5 h-3.5" />
-                          {revokingId === p.id ? 'Revoking...' : 'Revoke'}
-                        </button>
-                      )}
-                    </td>
+                  <div className="text-[10px] font-mono text-emerald-400 bg-slate-900/80 px-2.5 py-1 rounded border border-slate-800 truncate">
+                    <span className="text-slate-500">SHA-256: </span>
+                    {p.dataHash.slice(0, 24)}...
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => setActiveModalId(p.id)}
+                      className="flex-1 py-2 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> View & Decrypt
+                    </button>
+
+                    {p.status === 'ISSUED' && (
+                      <button
+                        onClick={() => handleRevoke(p.id)}
+                        disabled={revokingId === p.id}
+                        className="py-2 px-3 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-300 text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+                        title="Revoke prescription so pharmacy cannot dispense it"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        {revokingId === p.id ? 'Revoking...' : 'Revoke'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-slate-800">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950/80 text-slate-400 uppercase font-mono text-[10px]">
+                  <tr>
+                    <th className="p-3">Patient</th>
+                    <th className="p-3">Issued Date</th>
+                    <th className="p-3">Tamper Hash (SHA-256)</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 bg-slate-900/40">
+                  {prescriptions.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-800/30">
+                      <td className="p-3 font-semibold text-slate-200">{p.patientName}</td>
+                      <td className="p-3 text-slate-400">{p.dateIssued}</td>
+                      <td className="p-3 font-mono text-[10px] text-emerald-400">{p.dataHash.slice(0, 16)}...</td>
+                      <td className="p-3">
+                        <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                          p.status === 'REVOKED'
+                            ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            : p.status === 'DISPENSED' 
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+                              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        }`}>
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right space-x-2">
+                        <button
+                          onClick={() => setActiveModalId(p.id)}
+                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors inline-flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> View & Decrypt
+                        </button>
+
+                        {/* TASK 7: Doctor Revocation Button */}
+                        {p.status === 'ISSUED' && (
+                          <button
+                            onClick={() => handleRevoke(p.id)}
+                            disabled={revokingId === p.id}
+                            className="px-2.5 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-300 text-xs font-medium transition-colors inline-flex items-center gap-1"
+                            title="Revoke prescription so pharmacy cannot dispense it"
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                            {revokingId === p.id ? 'Revoking...' : 'Revoke'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

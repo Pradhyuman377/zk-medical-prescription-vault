@@ -81,10 +81,10 @@ export default function App() {
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
       <main className="pb-16">
         <Suspense fallback={<PageLoader />}>
-          {activeTab === 'doctor' && <DoctorDashboard />}
-          {activeTab === 'patient' && <PatientDashboard />}
-          {activeTab === 'pharmacist' && <PharmacistDashboard />}
-          {activeTab === 'security' && <SecurityDashboard />}
+          {activeTab === 'doctor' && <DoctorDashboard key={user?.id} />}
+          {activeTab === 'patient' && <PatientDashboard key={user?.id} />}
+          {activeTab === 'pharmacist' && <PharmacistDashboard key={user?.id} />}
+          {activeTab === 'security' && <SecurityDashboard key={user?.id} />}
         </Suspense>
       </main>
     </div>

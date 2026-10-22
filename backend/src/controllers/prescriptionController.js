@@ -1,4 +1,5 @@
 const prisma = require('../config/db');
+const bcrypt = require('bcryptjs');
 const CryptoService = require('../services/cryptoService');
 const OCRClient = require('../services/ocrClient');
 const AnomalyDetector = require('../middleware/anomalyDetector');
@@ -60,6 +61,7 @@ class PrescriptionController {
       const {
         patientId,
         patientName,
+        patientEmail,
         clinicName,
         dateIssued,
         diagnosis,
@@ -70,6 +72,11 @@ class PrescriptionController {
         return res.status(400).json({ error: 'Patient name and at least one medication are required.' });
       }
 
+      if (!patientEmail || !patientEmail.trim()) {
+        return res.status(400).json({ error: 'Patient email address is mandatory for prescription issuance.' });
+      }
+      const cleanPatientEmail = patientEmail.trim().toLowerCase();
+
       // Fetch issuing doctor with encrypted keys
       const doctor = await prisma.user.findUnique({
         where: { id: req.user.id }
@@ -79,24 +86,20 @@ class PrescriptionController {
         return res.status(403).json({ error: 'Only registered medical doctors can issue prescriptions.' });
       }
 
-      // Resolve patient (if patientId not provided, search by name or role)
+      // Resolve patient by mandatory unique email
       let patient = null;
       if (patientId) {
         patient = await prisma.user.findUnique({ where: { id: patientId } });
       }
-      if (!patient) {
-        patient = await prisma.user.findFirst({
-          where: { role: 'PATIENT', name: patientName }
-        });
-      }
-      if (!patient) {
-        patient = await prisma.user.findFirst({ where: { role: 'PATIENT' } });
+      if (!patient && cleanPatientEmail) {
+        patient = await prisma.user.findUnique({ where: { email: cleanPatientEmail } });
       }
       const resolvedPatientId = patient ? patient.id : doctor.id;
 
       // 1. Construct canonical data object for integrity hashing
       const canonicalRecord = {
         patientName,
+        patientEmail: cleanPatientEmail,
         doctorName: doctor.name,
         doctorLicense: doctor.licenseNumber || 'N/A',
         clinicName: clinicName || doctor.clinic || 'Medical Clinic',
@@ -150,6 +153,7 @@ class PrescriptionController {
           patientId: resolvedPatientId,
           doctorId: doctor.id,
           patientName,
+          patientEmail: cleanPatientEmail,
           doctorName: doctor.name,
           clinicName: canonicalRecord.clinicName,
           dateIssued: canonicalRecord.dateIssued,
@@ -207,6 +211,18 @@ class PrescriptionController {
 
       if (!prescription) {
         return res.status(404).json({ error: 'Prescription not found in vault.' });
+      }
+
+      // RBAC Privacy Isolation: Patients can ONLY view their own prescriptions
+      const isOwnerPatient = user.role === 'PATIENT' && (
+        prescription.patientId === user.id ||
+        (prescription.patientEmail && prescription.patientEmail.toLowerCase().trim() === user.email.toLowerCase().trim())
+      );
+
+      if (user.role === 'PATIENT' && !isOwnerPatient) {
+        return res.status(403).json({
+          error: 'Access Denied: You are not authorized to view another patient\'s medical record.'
+        });
       }
 
       // Determine decryption key (ECDH derived key if keyExchangeUsed === 'ECDH-secp256k1', else Master Key)
@@ -276,8 +292,10 @@ class PrescriptionController {
         ? (() => { try { return CryptoService.decryptAES256GCM(prescription.encryptedDiagnosis, decryptionKey); } catch { return CryptoService.decryptAES256GCM(prescription.encryptedDiagnosis); } })()
         : CryptoService.decryptAES256GCM(prescription.encryptedDiagnosis));
 
-      const reconstructedRecord = {
+      // Reconstruct with patientEmail if present
+      const recordWithEmail = {
         patientName: prescription.patientName,
+        ...(prescription.patientEmail ? { patientEmail: prescription.patientEmail.toLowerCase().trim() } : {}),
         doctorName: prescription.doctorName,
         doctorLicense: prescription.doctor?.licenseNumber || 'N/A',
         clinicName: prescription.clinicName,
@@ -286,8 +304,26 @@ class PrescriptionController {
         medications: decryptedMedications
       };
 
-      const computedHash = CryptoService.computeSHA256(reconstructedRecord);
-      const isHashValid = computedHash === prescription.dataHash;
+      let computedHash = CryptoService.computeSHA256(recordWithEmail);
+      let isHashValid = computedHash === prescription.dataHash;
+
+      // Backward compatibility fallback for records issued before patientEmail was included in hash
+      if (!isHashValid) {
+        const recordWithoutEmail = {
+          patientName: prescription.patientName,
+          doctorName: prescription.doctorName,
+          doctorLicense: prescription.doctor?.licenseNumber || 'N/A',
+          clinicName: prescription.clinicName,
+          dateIssued: prescription.dateIssued,
+          diagnosis: rawOriginalDiagnosis,
+          medications: decryptedMedications
+        };
+        const legacyHash = CryptoService.computeSHA256(recordWithoutEmail);
+        if (legacyHash === prescription.dataHash) {
+          computedHash = legacyHash;
+          isHashValid = true;
+        }
+      }
 
       let isSignatureValid = false;
       if (prescription.doctor?.publicKey && prescription.doctorSignature) {
@@ -571,11 +607,22 @@ class PrescriptionController {
       let where = {};
 
       if (user.role === 'PATIENT') {
-        where = { patientId: user.id };
+        where = {
+          OR: [
+            { patientId: user.id },
+            { patientEmail: user.email.toLowerCase().trim() }
+          ]
+        };
       } else if (user.role === 'DOCTOR') {
         where = { doctorId: user.id };
+      } else if (user.role === 'PHARMACIST') {
+        // Strict Privacy Isolation: Pharmacists can ONLY view prescriptions they personally dispensed.
+        // They CANNOT browse or access other patients' pending prescriptions without direct patient presentation (ID or QR code).
+        where = {
+          dispensedByPharmacist: { contains: user.name }
+        };
       }
-      // Pharmacists and Auditors can view all records to verify dispense status
+      // Auditors can view all records to verify audit trails and compliance
 
       const list = await prisma.prescription.findMany({
         where,
@@ -583,11 +630,13 @@ class PrescriptionController {
         select: {
           id: true,
           patientName: true,
+          patientEmail: true,
           doctorName: true,
           clinicName: true,
           dateIssued: true,
           status: true,
           dataHash: true,
+          dispensedByPharmacist: true,
           dispensedAt: true,
           createdAt: true
         }
@@ -596,6 +645,56 @@ class PrescriptionController {
       return res.json({ prescriptions: list });
     } catch (error) {
       return res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Patient claims an unassigned prescription using their unique Prescription ID
+   */
+  static async claimPrescription(req, res) {
+    try {
+      const { prescriptionId } = req.body;
+      const user = req.user;
+
+      if (user.role !== 'PATIENT') {
+        return res.status(403).json({ error: 'Only registered patients can link prescriptions to their vault.' });
+      }
+
+      if (!prescriptionId) {
+        return res.status(400).json({ error: 'Prescription ID is required.' });
+      }
+
+      const prescription = await prisma.prescription.findUnique({
+        where: { id: prescriptionId.trim() }
+      });
+
+      if (!prescription) {
+        return res.status(404).json({ error: 'Prescription not found with the provided ID.' });
+      }
+
+      // Check if already claimed by another registered patient
+      const doctors = await prisma.user.findMany({ where: { role: 'DOCTOR' }, select: { id: true } });
+      const doctorIds = doctors.map(d => d.id);
+      const isUnassigned = doctorIds.includes(prescription.patientId);
+
+      if (prescription.patientId !== user.id && !isUnassigned) {
+        return res.status(403).json({ error: 'This prescription is already bound to another registered patient vault.' });
+      }
+
+      // Link to this patient
+      const updated = await prisma.prescription.update({
+        where: { id: prescription.id },
+        data: { patientId: user.id }
+      });
+
+      return res.json({
+        message: 'Prescription successfully linked to your personal vault!',
+        prescriptionId: updated.id,
+        patientName: updated.patientName
+      });
+    } catch (err) {
+      console.error('Claim prescription error:', err);
+      return res.status(500).json({ error: 'Failed to link prescription: ' + err.message });
     }
   }
 }

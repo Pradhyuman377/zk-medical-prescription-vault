@@ -30,7 +30,6 @@ const loginRateLimiter = rateLimit({
 router.post('/register', AuthController.register);
 router.post('/login', loginRateLimiter, AuthController.login);
 router.get('/me', authenticate, AuthController.getMe);
-router.post('/seed-demo', AuthController.seedDemoAccounts);
 
 module.exports = router;
 

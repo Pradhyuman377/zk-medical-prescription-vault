@@ -40,7 +40,15 @@ router.post(
   PrescriptionController.issuePrescription
 );
 
-// 3. List User Prescriptions
+// 3. Claim / Link Prescription by ID into Patient Vault
+router.post(
+  '/claim',
+  authenticate,
+  authorizeRoles('PATIENT'),
+  PrescriptionController.claimPrescription
+);
+
+// 4. List User Prescriptions
 router.get(
   '/',
   authenticate,

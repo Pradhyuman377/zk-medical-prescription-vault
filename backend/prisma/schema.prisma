@@ -33,6 +33,7 @@ model Prescription {
   patientId            String
   doctorId             String
   patientName          String
+  patientEmail         String?
   doctorName           String
   clinicName           String
   dateIssued           String

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { prescriptionService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Lock, ShieldCheck, Eye, Copy, Check, QrCode, FileText, Pill, Calendar, Building, X, Sparkles } from 'lucide-react';
+import { Lock, ShieldCheck, Eye, Copy, Check, QrCode, FileText, Pill, Calendar, Building, X, Sparkles, Plus, KeyRound } from 'lucide-react';
 import PrescriptionModal from '../components/PrescriptionModal';
 import { useToast } from '../context/ToastContext';
 import { SkeletonCard } from '../components/SkeletonLoader';
@@ -18,6 +18,11 @@ export default function PatientDashboard() {
   const [qrModalData, setQrModalData] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrCopied, setQrCopied] = useState(false);
+
+  // Claim Unlinked / Walk-In Prescription State
+  const [claimId, setClaimId] = useState('');
+  const [claiming, setClaiming] = useState(false);
+  const [showClaimBox, setShowClaimBox] = useState(false);
 
   useEffect(() => {
     loadPrescriptions();
@@ -69,6 +74,24 @@ export default function PatientDashboard() {
     setTimeout(() => setQrCopied(false), 3000);
   };
 
+  const handleClaim = async (e) => {
+    e.preventDefault();
+    if (!claimId.trim()) return;
+    setClaiming(true);
+    try {
+      const res = await prescriptionService.claimPrescription(claimId.trim());
+      toast.success('Prescription Linked', res.message || 'Prescription added to your vault!');
+      setClaimId('');
+      setShowClaimBox(false);
+      loadPrescriptions();
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message;
+      toast.error('Linking Failed', msg);
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
@@ -80,7 +103,7 @@ export default function PatientDashboard() {
           </span>
           <h1 className="text-2xl font-bold text-white">Encrypted Prescription Portfolio</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Welcome back, {user?.name}. Your medical records are encrypted with AES-256-GCM + pairwise ECDH. Share your Dispense ID or QR token with any pharmacy safely.
+            Authenticated Patient: <span className="text-slate-200 font-semibold">{user?.name}</span> ({user?.email}) • Records are encrypted with AES-256-GCM + pairwise ECDH. Share your Dispense ID or QR token with any pharmacy safely.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 text-slate-300">
@@ -96,6 +119,49 @@ export default function PatientDashboard() {
           <span className="font-semibold text-slate-100">How Pharmacy Sharing Works: </span>
           When you present your Prescription ID or <span className="text-emerald-400 font-semibold">HMAC-signed QR Code</span> to a pharmacist, our system uses <span className="text-emerald-400 font-semibold">Selective Disclosure</span>. The pharmacist can verify the doctor's signature and dispense medications, but your confidential clinical diagnosis remains completely encrypted and hidden from them.
         </div>
+      </div>
+
+      {/* Claim / Link Prescription by ID Banner */}
+      <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-white flex items-center gap-1.5">
+              <KeyRound className="w-4 h-4 text-cyan-400" />
+              Have a Walk-In or Paper Slip from your Doctor?
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Link any prescription directly to your vault using its unique Prescription UUID.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowClaimBox(!showClaimBox)}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 self-start sm:self-auto"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            {showClaimBox ? 'Close Linker' : 'Link Prescription by ID'}
+          </button>
+        </div>
+
+        {showClaimBox && (
+          <form onSubmit={handleClaim} className="mt-3 pt-3 border-t border-slate-800 flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              required
+              placeholder="Paste 36-character Prescription UUID (e.g. 9d872e5c-da6c-4cc8-b949-ce233d067cba)"
+              value={claimId}
+              onChange={(e) => setClaimId(e.target.value)}
+              className="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-cyan-500 focus:outline-none text-slate-200 font-mono text-xs placeholder:text-slate-600"
+            />
+            <button
+              type="submit"
+              disabled={claiming}
+              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 whitespace-nowrap"
+            >
+              {claiming ? 'Linking...' : 'Claim & Add to Vault'}
+            </button>
+          </form>
+        )}
       </div>
 
       {/* List of Prescriptions */}

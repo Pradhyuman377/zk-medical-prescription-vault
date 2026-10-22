@@ -26,10 +26,6 @@ export const authService = {
   getMe: async () => {
     const res = await api.get('/auth/me');
     return res.data;
-  },
-  seedDemo: async () => {
-    const res = await api.post('/auth/seed-demo');
-    return res.data;
   }
 };
 
@@ -50,8 +46,12 @@ export const prescriptionService = {
     const res = await api.post('/prescriptions/issue', payload);
     return res.data;
   },
-  listPrescriptions: async () => {
-    const res = await api.get('/prescriptions');
+  claimPrescription: async (prescriptionId) => {
+    const res = await api.post('/prescriptions/claim', { prescriptionId });
+    return res.data;
+  },
+  listPrescriptions: async (params = {}) => {
+    const res = await api.get('/prescriptions', { params });
     return res.data;
   },
   getPrescriptionById: async (id) => {

@@ -23,6 +23,7 @@ export default function DoctorDashboard() {
   const [rawOcrText, setRawOcrText] = useState('');
   
   const [patientName, setPatientName] = useState('');
+  const [patientEmail, setPatientEmail] = useState('');
   const [clinicName, setClinicName] = useState(user?.clinic || '');
   const [diagnosis, setDiagnosis] = useState('');
   const [medications, setMedications] = useState([]);
@@ -134,11 +135,16 @@ export default function DoctorDashboard() {
 
   const handleIssuePrescription = async (e) => {
     e.preventDefault();
+    if (!patientEmail || !patientEmail.trim()) {
+      toast.error('Email Required', 'Patient email address is mandatory for cryptographic vault delivery.');
+      return;
+    }
     setIssuing(true);
     setIssueResult(null);
     try {
       const payload = {
         patientName,
+        patientEmail: patientEmail.trim().toLowerCase(),
         clinicName,
         diagnosis,
         medications
@@ -213,7 +219,7 @@ export default function DoctorDashboard() {
           </span>
           <h1 className="text-2xl font-bold text-white">Prescription Issuance & Cryptographic Vault</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Upload paper slips for AI OCR extraction, verify drug details & interactions, and seal records with your RSA private key.
+            Logged in as <span className="text-slate-200 font-semibold">{user?.name}</span> ({user?.email}) • License: <span className="text-blue-300 font-mono">{user?.licenseNumber || 'MED-USA'}</span> • Clinic: <span className="text-slate-300 font-medium">{user?.clinic || clinicName}</span>
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 text-slate-300">
@@ -308,9 +314,9 @@ export default function DoctorDashboard() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
               <div>
-                <label className="text-slate-300 block mb-1 font-medium">Patient Full Name</label>
+                <label className="text-slate-300 block mb-1 font-medium">Patient Full Name *</label>
                 <input
                   type="text"
                   required
@@ -322,7 +328,22 @@ export default function DoctorDashboard() {
               </div>
 
               <div>
-                <label className="text-slate-300 block mb-1 font-medium">Clinic / Facility</label>
+                <label className="text-slate-300 block mb-1 font-medium flex items-center justify-between">
+                  <span>Patient Email *</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">Mandatory Vault ID</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. maya@patient.com (required)"
+                  value={patientEmail}
+                  onChange={(e) => setPatientEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-slate-200 placeholder:text-slate-600"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 block mb-1 font-medium">Clinic / Facility *</label>
                 <input
                   type="text"
                   required

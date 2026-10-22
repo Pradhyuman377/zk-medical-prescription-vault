@@ -19,6 +19,7 @@ export default function PharmacistDashboard() {
   const [qrError, setQrError] = useState('');
   
   const [activeModalId, setActiveModalId] = useState(null);
+  const [filterTab, setFilterTab] = useState('my_dispensed'); // 'my_dispensed' | 'all'
 
   useEffect(() => {
     loadPrescriptions();
@@ -34,6 +35,14 @@ export default function PharmacistDashboard() {
       setLoading(false);
     }
   };
+
+  const displayedPrescriptions = prescriptions.filter(p => {
+    if (filterTab === 'my_dispensed') {
+      return p.status === 'DISPENSED' && p.dispensedByPharmacist && user?.name &&
+        p.dispensedByPharmacist.toLowerCase().includes(user.name.toLowerCase());
+    }
+    return true; // 'all'
+  });
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -78,12 +87,23 @@ export default function PharmacistDashboard() {
           </span>
           <h1 className="text-2xl font-bold text-white">eRx Verification & Dispensation Hub</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Verify doctor cryptographic credentials, scan patient QR codes, and prevent double-fills & revoked fills.
+            Logged in as <span className="text-slate-200 font-semibold">{user?.name}</span> ({user?.email}) • License: <span className="text-amber-300 font-mono">{user?.licenseNumber || 'PHARM-N/A'}</span> • Role: <span className="text-slate-300 font-medium">Authorized Pharmacist</span>
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs font-mono bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 text-slate-300">
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
           <span>Double-Fill & Revocation Guard: Active</span>
+        </div>
+      </div>
+
+      {/* Zero-Knowledge Privacy Notice */}
+      <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex items-start gap-3 text-xs text-slate-300">
+        <Lock className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+        <div>
+          <span className="font-semibold text-slate-100">Zero-Knowledge Patient Privacy Enforced: </span>
+          Pharmacists cannot browse or search through other patients' pending health records. Prescriptions can 
+          <span className="text-amber-400 font-semibold"> ONLY be accessed on-demand</span> when the patient presents their 
+          <span className="text-emerald-400 font-semibold"> HMAC-signed QR Code</span> or <span className="text-amber-400 font-semibold">Prescription ID</span> at your counter.
         </div>
       </div>
 
@@ -145,23 +165,41 @@ export default function PharmacistDashboard() {
 
       {/* Prescription Queue */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            Prescription Verification Queue
-          </h2>
-          <span className="text-xs text-slate-500">{prescriptions.length} Records In System</span>
+            <h2 className="text-sm font-semibold text-white">
+              Pharmacy Dispense Ledger (Fulfilled at this Counter)
+            </h2>
+            <span className="text-xs text-slate-500 font-mono">({displayedPrescriptions.length})</span>
+          </div>
+
+          <div className="text-xs text-slate-400 font-mono">
+            License: {user?.licenseNumber || 'R.Ph'}
+          </div>
         </div>
 
         {loading ? (
           <SkeletonTable rows={3} />
-        ) : prescriptions.length === 0 ? (
-          <p className="text-xs text-slate-500">No prescriptions found in system.</p>
+        ) : displayedPrescriptions.length === 0 ? (
+          <div className="text-center py-10 space-y-2">
+            <Pill className="w-7 h-7 text-slate-600 mx-auto" />
+            <p className="text-xs text-slate-400 font-medium">
+              {filterTab === 'my_dispensed'
+                ? `No prescriptions dispensed by ${user?.name} yet.`
+                : filterTab === 'pending'
+                  ? 'No pending prescriptions waiting for dispense.'
+                  : 'No prescriptions found in system.'}
+            </p>
+            <p className="text-[10px] text-slate-600">
+              {filterTab === 'my_dispensed' ? 'When you verify and fulfill patient prescriptions, they will be tracked here under your license.' : 'New doctor prescriptions will appear automatically.'}
+            </p>
+          </div>
         ) : (
           <>
             {/* Mobile Cards View */}
             <div className="md:hidden space-y-3">
-              {prescriptions.map((p) => (
+              {displayedPrescriptions.map((p) => (
                 <div key={p.id} className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -216,7 +254,7 @@ export default function PharmacistDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 bg-slate-900/40">
-                  {prescriptions.map((p) => (
+                  {displayedPrescriptions.map((p) => (
                     <tr key={p.id} className="hover:bg-slate-800/30">
                       <td className="p-3 font-mono text-[11px] text-slate-400">{p.id.slice(0, 16)}...</td>
                       <td className="p-3 font-semibold text-slate-200">{p.patientName}</td>

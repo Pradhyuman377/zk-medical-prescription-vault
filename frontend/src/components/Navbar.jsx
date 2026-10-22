@@ -133,6 +133,12 @@ export default function Navbar({ activeTab, setActiveTab, isGuest = false, onTog
                 <LogOut className="w-4 h-4" />
               </button>
 
+              {/* Mobile Compact User Pill */}
+              <div className="flex sm:hidden items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px]">
+                <span className="font-semibold text-slate-200 max-w-[90px] truncate">{user.name.split(' ')[0]}</span>
+                {getRoleBadge(user.role)}
+              </div>
+
               {/* Mobile Hamburger Toggle */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

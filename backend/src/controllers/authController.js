@@ -20,6 +20,21 @@ class AuthController {
         return res.status(400).json({ error: `Invalid role. Allowed roles: ${validRoles.join(', ')}` });
       }
 
+      // Security Guard: Prevent unauthorized creation of Security Auditor accounts
+      if (role === 'AUDITOR') {
+        // Dynamically re-read .env so any changes to AUDITOR_INVITE_CODE apply instantly
+        try { require('dotenv').config(); } catch {}
+        const rawCode = process.env.AUDITOR_INVITE_CODE || 'AUDIT-VAULT-2026-SEC';
+        const expectedCode = String(rawCode).replace(/^["']|["']$/g, '').trim();
+        const providedCode = String(req.body.auditorSecurityCode || '').replace(/^["']|["']$/g, '').trim();
+
+        if (!providedCode || providedCode !== expectedCode) {
+          return res.status(403).json({
+            error: 'Access Denied: Invalid Security Passcode for Auditor registration.'
+          });
+        }
+      }
+
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) {
         return res.status(400).json({ error: 'A user with this email already exists.' });
@@ -61,6 +76,18 @@ class AuthController {
           lockedUntil: null
         }
       });
+
+      // Auto-claim any prescriptions issued to this email before account registration
+      if (role === 'PATIENT') {
+        try {
+          await prisma.prescription.updateMany({
+            where: { patientEmail: email.toLowerCase().trim() },
+            data: { patientId: user.id }
+          });
+        } catch (claimErr) {
+          console.warn('Auto-claim on register warning:', claimErr.message);
+        }
+      }
 
       const token = jwt.sign(
         { userId: user.id, role: user.role, email: user.email },
@@ -199,6 +226,7 @@ class AuthController {
       const demoUsers = [
         { email: 'doctor@hospital.org', password: 'password123', name: 'Dr. Sarah Jenkins, MD', role: 'DOCTOR', licenseNumber: 'MED-90210-USA', clinic: 'Metropolitan General Hospital' },
         { email: 'patient@vault.org', password: 'password123', name: 'Aarav Patel', role: 'PATIENT', licenseNumber: null, clinic: null },
+        { email: 'maya@vault.org', password: 'password123', name: 'Maya Sharma', role: 'PATIENT', licenseNumber: null, clinic: null },
         { email: 'pharmacist@rxcare.org', password: 'password123', name: 'Liam Vance, R.Ph', role: 'PHARMACIST', licenseNumber: 'PHARM-88210', clinic: 'CVS Care Pharmacy #412' },
         { email: 'auditor@cybersecurity.org', password: 'password123', name: 'Elena Rostova, CISO', role: 'AUDITOR', licenseNumber: 'SEC-AUD-007', clinic: 'Department of Health & Security' }
       ];

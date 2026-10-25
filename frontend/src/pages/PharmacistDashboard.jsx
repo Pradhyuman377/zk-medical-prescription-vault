@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { prescriptionService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Pill, Search, ShieldCheck, CheckCircle2, AlertTriangle, Eye, Lock, ArrowRight, QrCode, ShieldAlert, Ban } from 'lucide-react';
+import { Pill, Search, ShieldCheck, CheckCircle2, AlertTriangle, Eye, Lock, ArrowRight, QrCode, ShieldAlert, Ban, Camera } from 'lucide-react';
 import PrescriptionModal from '../components/PrescriptionModal';
 import { useToast } from '../context/ToastContext';
 import { SkeletonTable } from '../components/SkeletonLoader';
+import QRCameraScannerModal from '../components/QRCameraScannerModal';
+import CryptoTooltip from '../components/CryptoTooltip';
 
 export default function PharmacistDashboard() {
   const { user } = useAuth();
@@ -17,6 +19,7 @@ export default function PharmacistDashboard() {
   const [qrInput, setQrInput] = useState('');
   const [qrVerifying, setQrVerifying] = useState(false);
   const [qrError, setQrError] = useState('');
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
   
   const [activeModalId, setActiveModalId] = useState(null);
   const [filterTab, setFilterTab] = useState('my_dispensed'); // 'my_dispensed' | 'all'
@@ -76,6 +79,30 @@ export default function PharmacistDashboard() {
     }
   };
 
+  const handleCameraScanSuccess = async (scannedPayload) => {
+    if (!scannedPayload || !scannedPayload.trim()) return;
+    setQrInput(scannedPayload);
+    setQrVerifying(true);
+    setQrError('');
+    try {
+      const res = await prescriptionService.verifyQRCode({ rawPayload: scannedPayload.trim() });
+      if (res.prescription?.id) {
+        setActiveModalId(res.prescription.id);
+        toast.success('HMAC QR Validated', `Prescription for ${res.prescription.patientName} verified from camera stream.`);
+        setQrInput('');
+      } else {
+        setQrError('Could not resolve prescription from QR payload.');
+        toast.error('Verification Error', 'Could not resolve prescription from QR payload.');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.error || 'QR Verification failed: Invalid cryptographic signature.';
+      setQrError(msg);
+      toast.error('Invalid QR Signature', msg);
+    } finally {
+      setQrVerifying(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
@@ -90,10 +117,12 @@ export default function PharmacistDashboard() {
             Logged in as <span className="text-slate-200 font-semibold">{user?.name}</span> ({user?.email}) • License: <span className="text-amber-300 font-mono">{user?.licenseNumber || 'PHARM-N/A'}</span> • Role: <span className="text-slate-300 font-medium">Authorized Pharmacist</span>
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-mono bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 text-slate-300">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>Double-Fill & Revocation Guard: Active</span>
-        </div>
+        <CryptoTooltip term="Double-Fill Guard">
+          <div className="flex items-center gap-2 text-xs font-mono bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 text-slate-300 hover:border-emerald-500/50 transition-colors">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Double-Fill & Revocation Guard: Active ℹ️</span>
+          </div>
+        </CryptoTooltip>
       </div>
 
       {/* Zero-Knowledge Privacy Notice */}
@@ -102,8 +131,18 @@ export default function PharmacistDashboard() {
         <div>
           <span className="font-semibold text-slate-100">Zero-Knowledge Patient Privacy Enforced: </span>
           Pharmacists cannot browse or search through other patients' pending health records. Prescriptions can 
-          <span className="text-amber-400 font-semibold"> ONLY be accessed on-demand</span> when the patient presents their 
-          <span className="text-emerald-400 font-semibold"> HMAC-signed QR Code</span> or <span className="text-amber-400 font-semibold">Prescription ID</span> at your counter.
+          <span className="text-amber-400 font-semibold"> ONLY be accessed on-demand</span> when the patient presents their{' '}
+          <CryptoTooltip term="HMAC-SHA256">
+            <span className="text-emerald-400 font-semibold border-b border-dashed border-emerald-500/60 pb-0.5">
+              HMAC-signed QR Code ℹ️
+            </span>
+          </CryptoTooltip>{' '}
+          or <span className="text-amber-400 font-semibold">Prescription ID</span> at your counter with{' '}
+          <CryptoTooltip term="Selective Disclosure">
+            <span className="text-cyan-400 font-semibold border-b border-dashed border-cyan-500/60 pb-0.5">
+              Selective Disclosure ℹ️
+            </span>
+          </CryptoTooltip>.
         </div>
       </div>
 
@@ -134,10 +173,21 @@ export default function PharmacistDashboard() {
 
         {/* TASK 11: QR Code Scanner / Paste Input Terminal */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            <QrCode className="w-4 h-4 text-emerald-400" />
-            Scan / Paste Patient QR Token
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+              <QrCode className="w-4 h-4 text-emerald-400" />
+              Scan / Paste Patient QR Token
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowCameraScanner(true)}
+              className="px-2.5 py-1 text-[11px] font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Open real-time webcam or image QR scanner"
+            >
+              <Camera className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Camera Scanner</span>
+            </button>
+          </div>
           <form onSubmit={handleVerifyQR} className="flex gap-3">
             <input
               type="text"
@@ -306,6 +356,13 @@ export default function PharmacistDashboard() {
           onDispensed={loadPrescriptions}
         />
       )}
+
+      {/* Interactive Camera & Image QR Scanner Modal */}
+      <QRCameraScannerModal
+        isOpen={showCameraScanner}
+        onClose={() => setShowCameraScanner(false)}
+        onScanSuccess={handleCameraScanSuccess}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   Lock, Pill, User, Building, Calendar, AlertTriangle, Ban, ShieldAlert,
   Printer, QrCode
 } from 'lucide-react';
+import CryptoTooltip from './CryptoTooltip';
 
 export default function PrescriptionModal({ prescriptionId, onClose, onDispensed }) {
   const { user } = useAuth();
@@ -450,43 +451,49 @@ export default function PrescriptionModal({ prescriptionId, onClose, onDispensed
 
               {/* Cryptographic Proof Badges */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className={`p-3 rounded-xl border flex items-center gap-3 ${
-                  data.cryptoVerification?.isIntegrityValid 
-                    ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400' 
-                    : 'bg-red-950/30 border-red-500/50 text-red-400'
-                }`}>
-                  <ShieldCheck className="w-5 h-5 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-semibold">SHA-256 Integrity</p>
-                    <p className="text-[10px] opacity-80">
-                      {data.cryptoVerification?.isIntegrityValid ? 'Tamper Proof (Verified)' : 'TAMPER DETECTED! HASH MISMATCH'}
-                    </p>
+                <CryptoTooltip term="SHA-256" className="w-full">
+                  <div className={`w-full p-3 rounded-xl border flex items-center gap-3 transition-colors ${
+                    data.cryptoVerification?.isIntegrityValid 
+                      ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400 hover:border-emerald-500/60' 
+                      : 'bg-red-950/30 border-red-500/50 text-red-400'
+                  }`}>
+                    <ShieldCheck className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold">SHA-256 Integrity ℹ️</p>
+                      <p className="text-[10px] opacity-80">
+                        {data.cryptoVerification?.isIntegrityValid ? 'Tamper Proof (Verified)' : 'TAMPER DETECTED! HASH MISMATCH'}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                </CryptoTooltip>
 
-                <div className="p-3 rounded-xl border bg-blue-950/20 border-blue-500/30 text-blue-400 flex items-center gap-3">
-                  <Key className="w-5 h-5 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-semibold">Doctor RSA-2048 Signature</p>
-                    <p className="text-[10px] opacity-80">
-                      {data.cryptoVerification?.isDoctorSignatureValid ? 'Authentic (Valid Key)' : 'Digital Signature Active'}
-                    </p>
+                <CryptoTooltip term="RSA-2048" className="w-full">
+                  <div className="w-full p-3 rounded-xl border bg-blue-950/20 border-blue-500/30 hover:border-blue-500/60 text-blue-400 flex items-center gap-3 transition-colors">
+                    <Key className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold">Doctor RSA-2048 Sig ℹ️</p>
+                      <p className="text-[10px] opacity-80">
+                        {data.cryptoVerification?.isDoctorSignatureValid ? 'Authentic (Valid Key)' : 'Digital Signature Active'}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                </CryptoTooltip>
 
-                <div className={`p-3 rounded-xl border flex items-center gap-3 ${
-                  data.diagnosisDisclosed 
-                    ? 'bg-purple-950/20 border-purple-500/30 text-purple-400'
-                    : 'bg-amber-950/20 border-amber-500/30 text-amber-400'
-                }`}>
-                  <Lock className="w-5 h-5 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs font-semibold">Privacy Mode</p>
-                    <p className="text-[10px] opacity-80">
-                      {data.diagnosisDisclosed ? 'Full Clinical Access' : 'Zero-Knowledge Disclosed'}
-                    </p>
+                <CryptoTooltip term="Selective Disclosure" className="w-full">
+                  <div className={`w-full p-3 rounded-xl border flex items-center gap-3 transition-colors ${
+                    data.diagnosisDisclosed 
+                      ? 'bg-purple-950/20 border-purple-500/30 text-purple-400 hover:border-purple-500/60'
+                      : 'bg-amber-950/20 border-amber-500/30 text-amber-400 hover:border-amber-500/60'
+                  }`}>
+                    <Lock className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold">Privacy Mode ℹ️</p>
+                      <p className="text-[10px] opacity-80">
+                        {data.diagnosisDisclosed ? 'Full Clinical Access' : 'Zero-Knowledge Disclosed'}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                </CryptoTooltip>
               </div>
 
               {/* Zero-Knowledge Selective Disclosure Alert for Pharmacist */}
@@ -580,14 +587,18 @@ export default function PrescriptionModal({ prescriptionId, onClose, onDispensed
 
               {/* Cryptographic Seals Footnote */}
               <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-1.5 text-[11px] font-mono">
-                <div className="flex items-center justify-between text-slate-400 truncate">
-                  <span>SHA-256 Digest:</span>
-                  <span className="text-emerald-400 truncate max-w-xs">{data.dataHash}</span>
-                </div>
-                <div className="flex items-center justify-between text-slate-400 truncate">
-                  <span>Doctor RSA Signature:</span>
-                  <span className="text-blue-400 truncate max-w-xs">{data.doctorSignature?.slice(0, 48)}...</span>
-                </div>
+                <CryptoTooltip term="SHA-256" className="w-full">
+                  <div className="w-full flex items-center justify-between text-slate-400 truncate hover:text-emerald-300 transition-colors">
+                    <span>SHA-256 Digest ℹ️:</span>
+                    <span className="text-emerald-400 truncate max-w-xs">{data.dataHash}</span>
+                  </div>
+                </CryptoTooltip>
+                <CryptoTooltip term="RSA-2048" className="w-full">
+                  <div className="w-full flex items-center justify-between text-slate-400 truncate hover:text-blue-300 transition-colors">
+                    <span>Doctor RSA Signature ℹ️:</span>
+                    <span className="text-blue-400 truncate max-w-xs">{data.doctorSignature?.slice(0, 48)}...</span>
+                  </div>
+                </CryptoTooltip>
               </div>
 
               {/* Dispensed Alert */}

@@ -8,6 +8,7 @@ import {
 import PrescriptionModal from '../components/PrescriptionModal';
 import { useToast } from '../context/ToastContext';
 import { SkeletonTable } from '../components/SkeletonLoader';
+import CryptoTooltip from '../components/CryptoTooltip';
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
@@ -133,6 +134,18 @@ export default function DoctorDashboard() {
     setMedications(medications.filter((_, i) => i !== index));
   };
 
+  const handleAutofillDemo = () => {
+    setPatientName('Aarav Sharma');
+    setPatientEmail('patient@demo.com');
+    setClinicName('Apollo Super Specialty Hospital');
+    setDiagnosis('Acute Bacterial Pharyngitis & Upper Respiratory Infection');
+    setMedications([
+      { drug_name: 'Amoxicillin', dosage: '500 mg', frequency: '1-0-1', duration: '7 days', instructions: 'After meals with water', confidence: 0.98 },
+      { drug_name: 'Paracetamol', dosage: '650 mg', frequency: 'SOS', duration: '3 days', instructions: 'Take when fever > 100°F (Max 3/day)', confidence: 0.95 }
+    ]);
+    toast.info('Sample Data Filled', 'Realistic clinical data loaded. Ready for cryptographic sealing.');
+  };
+
   const handleIssuePrescription = async (e) => {
     e.preventDefault();
     if (!patientEmail || !patientEmail.trim()) {
@@ -238,9 +251,11 @@ export default function DoctorDashboard() {
                 <Upload className="w-4 h-4 text-cyan-400" />
                 Upload Prescription Slip (AI OCR)
               </h2>
-              <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40">
-                EasyOCR + Confidence Engine
-              </span>
+              <CryptoTooltip term="EasyOCR">
+                <span className="text-[10px] text-cyan-400 font-mono bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40 hover:border-cyan-500/60 transition-colors">
+                  EasyOCR + Confidence Engine ℹ️
+                </span>
+              </CryptoTooltip>
             </div>
 
             <div className="border-2 border-dashed border-slate-700 hover:border-cyan-500/50 rounded-xl p-4 text-center cursor-pointer transition-colors relative bg-slate-950/40">
@@ -304,14 +319,28 @@ export default function DoctorDashboard() {
         {/* Right Column: Prescription Review & Cryptographic Sealing Form */}
         <div className="lg:col-span-7">
           <form onSubmit={handleIssuePrescription} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Lock className="w-4 h-4 text-emerald-400" />
-                Clinical Details & Vault Encryption
-              </h2>
-              <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/40">
-                AES-256-GCM + ECDH + SHA-256
-              </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                  Clinical Details & Vault Encryption
+                </h2>
+                <CryptoTooltip term="AES-256-GCM">
+                  <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/40 hover:border-emerald-500/60 transition-colors">
+                    AES-256-GCM + ECDH ℹ️
+                  </span>
+                </CryptoTooltip>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAutofillDemo}
+                className="px-2.5 py-1 text-[11px] font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm self-start sm:self-auto cursor-pointer"
+                title="Populate realistic clinical demo data with 1 click"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Fill Demo Data</span>
+              </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -537,10 +566,12 @@ export default function DoctorDashboard() {
                     </span>
                   </div>
 
-                  <div className="text-[10px] font-mono text-emerald-400 bg-slate-900/80 px-2.5 py-1 rounded border border-slate-800 truncate">
-                    <span className="text-slate-500">SHA-256: </span>
-                    {p.dataHash.slice(0, 24)}...
-                  </div>
+                  <CryptoTooltip term="SHA-256" className="w-full">
+                    <div className="w-full text-[10px] font-mono text-emerald-400 bg-slate-900/80 px-2.5 py-1 rounded border border-slate-800 truncate hover:border-emerald-500/50 transition-colors">
+                      <span className="text-slate-500">SHA-256: </span>
+                      {p.dataHash.slice(0, 24)}...
+                    </div>
+                  </CryptoTooltip>
 
                   <div className="flex items-center gap-2 pt-1">
                     <button
@@ -583,7 +614,13 @@ export default function DoctorDashboard() {
                     <tr key={p.id} className="hover:bg-slate-800/30">
                       <td className="p-3 font-semibold text-slate-200">{p.patientName}</td>
                       <td className="p-3 text-slate-400">{p.dateIssued}</td>
-                      <td className="p-3 font-mono text-[10px] text-emerald-400">{p.dataHash.slice(0, 16)}...</td>
+                      <td className="p-3">
+                        <CryptoTooltip term="SHA-256">
+                          <span className="font-mono text-[10px] text-emerald-400 bg-slate-950/60 px-2 py-0.5 rounded border border-slate-800 hover:border-emerald-500/50 transition-colors">
+                            {p.dataHash.slice(0, 16)}...
+                          </span>
+                        </CryptoTooltip>
+                      </td>
                       <td className="p-3">
                         <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
                           p.status === 'REVOKED'

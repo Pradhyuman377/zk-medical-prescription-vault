@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { SkeletonTable } from '../components/SkeletonLoader';
+import CryptoTooltip from '../components/CryptoTooltip';
 
 export default function SecurityDashboard() {
   const { toast } = useToast();
@@ -132,25 +133,29 @@ export default function SecurityDashboard() {
         </div>
         <div className="flex items-center gap-2">
           {/* TASK 10: Verify Audit Chain Button */}
-          <button
-            onClick={handleVerifyAuditChain}
-            disabled={verifyingChain}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20 transition-all disabled:opacity-50"
-          >
-            <Link2 className="w-3.5 h-3.5" />
-            <span>{verifyingChain ? 'Verifying...' : '🔗 Verify Audit Chain'}</span>
-          </button>
+          <CryptoTooltip term="Blockchain Hash Chain">
+            <button
+              onClick={handleVerifyAuditChain}
+              disabled={verifyingChain}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-lg shadow-purple-600/20 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span>{verifyingChain ? 'Verifying...' : '🔗 Verify Audit Chain'}</span>
+            </button>
+          </CryptoTooltip>
           <button
             onClick={fetchSecurityData}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-colors cursor-pointer"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Refresh</span>
           </button>
-          <div className="flex items-center gap-1.5 text-xs font-mono bg-slate-950/80 px-3.5 py-1.5 rounded-xl border border-slate-800 text-emerald-400">
-            <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
-            <span>IDS Active</span>
-          </div>
+          <CryptoTooltip term="Double-Fill Guard">
+            <div className="flex items-center gap-1.5 text-xs font-mono bg-slate-950/80 px-3.5 py-1.5 rounded-xl border border-slate-800 text-emerald-400 hover:border-emerald-500/50 transition-colors">
+              <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
+              <span>IDS Active ℹ️</span>
+            </div>
+          </CryptoTooltip>
         </div>
       </div>
 

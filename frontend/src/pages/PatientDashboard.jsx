@@ -5,6 +5,7 @@ import { Lock, ShieldCheck, Eye, Copy, Check, QrCode, FileText, Pill, Calendar, 
 import PrescriptionModal from '../components/PrescriptionModal';
 import { useToast } from '../context/ToastContext';
 import { SkeletonCard } from '../components/SkeletonLoader';
+import CryptoTooltip from '../components/CryptoTooltip';
 
 export default function PatientDashboard() {
   const { user } = useAuth();
@@ -106,10 +107,12 @@ export default function PatientDashboard() {
             Authenticated Patient: <span className="text-slate-200 font-semibold">{user?.name}</span> ({user?.email}) • Records are encrypted with AES-256-GCM + pairwise ECDH. Share your Dispense ID or QR token with any pharmacy safely.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-mono bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 text-slate-300">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>Zero-Knowledge Privacy: Enforced</span>
-        </div>
+        <CryptoTooltip term="Selective Disclosure">
+          <div className="flex items-center gap-2 text-xs font-mono bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 text-slate-300 hover:border-emerald-500/50 transition-colors">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Zero-Knowledge Privacy: Enforced ℹ️</span>
+          </div>
+        </CryptoTooltip>
       </div>
 
       {/* Info Card on Privacy */}
@@ -117,7 +120,19 @@ export default function PatientDashboard() {
         <QrCode className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
         <div>
           <span className="font-semibold text-slate-100">How Pharmacy Sharing Works: </span>
-          When you present your Prescription ID or <span className="text-emerald-400 font-semibold">HMAC-signed QR Code</span> to a pharmacist, our system uses <span className="text-emerald-400 font-semibold">Selective Disclosure</span>. The pharmacist can verify the doctor's signature and dispense medications, but your confidential clinical diagnosis remains completely encrypted and hidden from them.
+          When you present your Prescription ID or{' '}
+          <CryptoTooltip term="HMAC-SHA256">
+            <span className="text-emerald-400 font-semibold border-b border-dashed border-emerald-500/60 pb-0.5">
+              HMAC-signed QR Code ℹ️
+            </span>
+          </CryptoTooltip>{' '}
+          to a pharmacist, our system uses{' '}
+          <CryptoTooltip term="Selective Disclosure">
+            <span className="text-cyan-400 font-semibold border-b border-dashed border-cyan-500/60 pb-0.5">
+              Selective Disclosure ℹ️
+            </span>
+          </CryptoTooltip>.
+          The pharmacist can verify the doctor's signature and dispense medications, but your confidential clinical diagnosis remains completely encrypted and hidden from them.
         </div>
       </div>
 

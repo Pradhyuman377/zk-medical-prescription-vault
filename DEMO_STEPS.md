@@ -6,7 +6,7 @@ This guide provides a structured, step-by-step script for demonstrating the proj
 
 ## ⚡ 1. Launching the Services
 
-Open Windows PowerShell in the project root (`d:\ISC_project`) and run:
+Open Windows PowerShell in the project root directory and run:
 
 ```powershell
 .\run_all.ps1
@@ -19,16 +19,16 @@ Confirm all three services are active:
 
 ---
 
-## 🎭 2. Demo User Personas (1-Click Switcher)
+## 🎭 2. Demo User Personas & Credentials
 
-On the login page ([http://localhost:5173](http://localhost:5173)), you can click the quick-login cards:
+On the login page ([http://localhost:5173](http://localhost:5173)), sign in using the pre-configured demo credentials (password for all is `password123`):
 
-| Card | Persona | Role | Key Function to Demonstrate |
+| Role | Persona | Email | Key Function to Demonstrate |
 | :--- | :--- | :--- | :--- |
-| 👨‍⚕️ **Doctor** | Dr. Sarah Jenkins | `DOCTOR` | Uploads slip, AI extracts entities, signs with RSA private key |
-| 🧑 **Patient** | Aarav Patel | `PATIENT` | Inspects full record, shares Pharmacy Dispense ID |
-| 💊 **Pharmacist** | Liam Vance, R.Ph | `PHARMACIST` | Verifies doctor signature, sees meds only (diagnosis is hidden) |
-| 🛡️ **SecOps Auditor**| Elena Rostova | `AUDITOR` | Inspects live IDS anomalies and cryptographic audit logs |
+| 👨‍⚕️ **Doctor** | Dr. Sarah Jenkins | `doctor@hospital.org` | Uploads slip, AI extracts entities, signs with RSA private key |
+| 🧑 **Patient** | Aarav Patel | `patient@vault.org` | Inspects full record, shares Pharmacy Dispense ID & QR code |
+| 💊 **Pharmacist** | Liam Vance, R.Ph | `pharmacist@rxcare.org` | Verifies doctor signature, sees meds only (diagnosis is hidden) |
+| 🛡️ **SecOps Auditor**| Elena Rostova | `auditor@cybersecurity.org` | Inspects live IDS anomalies and cryptographic audit logs |
 
 ---
 
@@ -37,21 +37,21 @@ On the login page ([http://localhost:5173](http://localhost:5173)), you can clic
 ### 🎬 Scenario 1: The Doctor Issues a Tamper-Proof Prescription (AI + Crypto)
 
 1. **Log in as Doctor:**
-   * On the login screen, click the **Doctor** demo card (`doctor@hospital.org`).
+   * On the login screen, enter `doctor@hospital.org` and password `password123`.
 2. **Upload Slip for AI OCR Extraction:**
-   * In the **Upload Prescription Slip** section, click the file box and choose an image of a prescription (or any test slip image).
+   * In the **Upload Prescription Slip** section, click the file box and choose an image of a prescription (e.g. `pediatric_prescription.png`).
    * Click **"Extract Medical Entities via AI"**.
    * **What to show the evaluator:**
      * Point out that the request calls the **Python FastAPI microservice** on port 8000.
      * OpenCV cleans up the image (binarization + contrast enhancement).
-     * The parser automatically extracts the **Doctor name**, **Clinic**, **Confidential Diagnosis**, and structured **Medications with dosages and frequencies**.
+     * The parser automatically extracts the **Doctor name**, **Clinic**, **Confidential Diagnosis**, and structured **Medications with dosages, frequencies, and confidence scores**.
 3. **Cryptographically Seal the e-Prescription:**
-   * Review the extracted fields in the clinical form.
+   * Review the extracted fields in the clinical form and enter the patient email: `patient@vault.org`.
    * Click **"Sign, Hash (SHA-256) & Seal to Vault"**.
    * **What to show the evaluator:**
      * The system computes a canonical **SHA-256 tamper-evident fingerprint**.
      * The doctor signs the hash using their **RSA-2048 private key**.
-     * Diagnosis and medications are encrypted into the database using **AES-256-GCM**.
+     * Diagnosis and medications are encrypted into the database using **AES-256-GCM** with pairwise ECDH.
      * Copy or note the newly issued **Prescription ID**.
 
 ---
@@ -60,21 +60,21 @@ On the login page ([http://localhost:5173](http://localhost:5173)), you can clic
 
 1. **Log in as Patient:**
    * Click the sign-out icon in the top right.
-   * Click the **Patient** demo card (`patient@vault.org`).
+   * Sign in with `patient@vault.org` / `password123`.
 2. **Inspect the Vault Record:**
    * In **"My Vault"**, locate the prescription just issued by the doctor.
    * Click **"View & Decrypt Full eRx"**.
    * Notice that because the user is the **Patient**, they can view their **Confidential Diagnosis** as well as their prescribed medications.
-   * Close the modal and click the **Copy icon** next to **Pharmacy Dispense ID**.
+   * Close the modal and click the **Copy icon** next to **Pharmacy Dispense ID** or click **"Generate QR Token"**.
 
 ---
 
 ### 🎬 Scenario 3: The Pharmacist & Zero-Knowledge Selective Disclosure
 
 1. **Log in as Pharmacist:**
-   * Sign out and click the **Pharmacist** demo card (`pharmacist@rxcare.org`).
+   * Sign out and sign in with `pharmacist@rxcare.org` / `password123`.
 2. **Lookup the Prescription:**
-   * In the **"Lookup Patient Prescription ID"** search bar, paste the copied Prescription ID and click **"Verify & Inspect"**.
+   * In the **"Lookup Patient Prescription ID"** search bar, paste the copied Prescription ID and click **"Verify & Inspect"** (or scan the QR token).
 3. **Demonstrate Selective Disclosure (The Zero-Knowledge Innovation):**
    * **Point this out to the evaluator:**
      * Look at the **Confidential Diagnosis** field: It reads:  

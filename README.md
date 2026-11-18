@@ -51,7 +51,7 @@ By decoupling sensitive clinical fields into cryptographically isolated **AES-25
 flowchart TD
     subgraph Client ["Client Layer (Port 5173)"]
         UI["React 18 + Vite + TailwindCSS"]
-        AuthSwitch["1-Click Demo Persona Switcher"]
+        AuthForm["Role-Based Authentication & Passcode Gate"]
         LiveSandbox["Live Attack Simulation Sandbox"]
     end
 
@@ -304,7 +304,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ## 👥 Demo User Personas
 
-The login page includes **1-Click Quick Login Cards** for seamless demonstrations:
+The vault comes pre-configured with default demo accounts across all 4 roles. You can sign in directly using these credentials or register new accounts in the Create Account tab:
 
 | Persona | Role | Email | Password | Primary Demonstration |
 | :--- | :--- | :--- | :--- | :--- |
@@ -313,6 +313,8 @@ The login page includes **1-Click Quick Login Cards** for seamless demonstration
 | **Liam Vance, R.Ph** | `PHARMACIST` | `pharmacist@rxcare.org` | `password123` | Lookup ID, verify doctor signature, view meds only (**Diagnosis redacted**) |
 | **Elena Rostova** | `AUDITOR` | `auditor@cybersecurity.org` | `password123` | Monitor IDS anomalies, run live attack simulations |
 
+> **Note for Auditor Registration:** The Security Auditor role is protected by an institutional security passcode gate (set in backend `.env` as `AUDITOR_INVITE_CODE="12345678"`).
+
 ---
 
 ## 🎬 Live Demonstration & Evaluation Script
@@ -320,22 +322,22 @@ The login page includes **1-Click Quick Login Cards** for seamless demonstration
 Follow these 4 scenarios to demonstrate the core features:
 
 ### Scenario 1: Issue a Tamper-Proof Prescription (Doctor Role)
-1. Log in as **Doctor** (`doctor@hospital.org`).
-2. Upload a prescription slip image and click **"Extract Medical Entities via AI"**.
-   - *Evaluator note:* Point out the OpenCV contrast enhancement and structured JSON output (doctor, diagnosis, medications, dosages).
-3. Review the extracted fields and click **"Sign, Hash (SHA-256) & Seal to Vault"**.
-   - *Evaluator note:* The system computes the canonical SHA-256 hash, signs it with the doctor's RSA-2048 private key, and encrypts diagnosis and medications as independent AES-256-GCM ciphertexts.
+1. Sign in as **Doctor** (`doctor@hospital.org` / `password123`).
+2. Upload a prescription slip image (e.g. `pediatric_prescription.png`) and click **"Extract Medical Entities via AI"**.
+   - *Evaluator note:* Point out the OpenCV contrast enhancement and structured JSON output (doctor, diagnosis, medications, dosages with confidence scores).
+3. Review the extracted fields, enter the patient email (`patient@vault.org`), and click **"Sign, Hash (SHA-256) & Seal to Vault"**.
+   - *Evaluator note:* The system computes the canonical SHA-256 hash, signs it with the doctor's RSA-2048 private key, and encrypts diagnosis and medications as independent AES-256-GCM ciphertexts with pairwise ECDH.
 4. Copy the generated **Prescription ID**.
 
 ### Scenario 2: Patient Vault Access (Privacy at Rest)
-1. Switch to **Patient** (`patient@vault.org`).
+1. Sign out and sign in as **Patient** (`patient@vault.org` / `password123`).
 2. Click **"View & Decrypt Full eRx"**.
 3. Notice that as the patient, you have access to the **Confidential Diagnosis** and the full medication list.
-4. Copy the **Pharmacy Dispense ID**.
+4. Copy the **Pharmacy Dispense ID** or click **"Generate QR Token"** to view the HMAC-signed QR code.
 
 ### Scenario 3: Zero-Knowledge Selective Disclosure (Pharmacist Role)
-1. Switch to **Pharmacist** (`pharmacist@rxcare.org`).
-2. Paste the Prescription ID into the search bar and click **"Verify & Inspect"**.
+1. Sign out and sign in as **Pharmacist** (`pharmacist@rxcare.org` / `password123`).
+2. Paste the Prescription ID into the search bar and click **"Verify & Inspect"** (or paste/scan the QR code).
 3. **Key Demonstration Point:**
    - The **Confidential Diagnosis** displays:  
      `[REDACTED: Protected by Zero-Knowledge Selective Disclosure]`.
@@ -344,9 +346,9 @@ Follow these 4 scenarios to demonstrate the core features:
 4. Click **"Fulfill & Dispense eRx"**. Status transitions to `DISPENSED`.
 
 ### Scenario 4: Attack Simulation Sandbox
-1. **Replay / Double-Fill Attack:** In Pharmacist view, attempt to click "Fulfill & Dispense" again on the same prescription. The system immediately blocks the request and triggers a **CRITICAL DOUBLE_FILL_ATTACK** alert.
+1. **Replay / Double-Fill Attack:** In Pharmacist view, attempt to click "Fulfill & Dispense" again on the same prescription. The system immediately blocks the request and triggers a **CRITICAL DOUBLE_FILL_ATTACK** alert (HTTP 409 Conflict).
 2. **Cryptographic Tamper Attack:** Click **"Simulate Tamper Attack"**. The backend corrupts the stored hash in the database. When refreshed, the integrity badge turns **RED** with **"TAMPER DETECTED! HASH MISMATCH"** and dispensing is disabled.
-3. **SecOps Monitoring Console:** Switch to **Auditor** (`auditor@cybersecurity.org`) to view live anomaly alerts with timestamps, severity levels, and IP addresses.
+3. **SecOps Monitoring Console:** Sign out and sign in as **Auditor** (`auditor@cybersecurity.org` / `password123`) to view live anomaly alerts with timestamps, severity levels, and IP addresses, or click **"🔗 Verify Audit Chain"** to verify the blockchain hash chain from Genesis.
 
 ---
 

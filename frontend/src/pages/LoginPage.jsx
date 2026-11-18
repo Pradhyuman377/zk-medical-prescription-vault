@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Lock, Mail, KeyRound, User, Stethoscope, Building, Pill, ShieldCheck, ArrowRight, Shield } from 'lucide-react';
+import { 
+  Lock, Mail, KeyRound, User, Stethoscope, Building, Pill, 
+  ShieldCheck, ArrowRight, Shield, Eye, EyeOff 
+} from 'lucide-react';
 
 export default function LoginPage({ onBack }) {
   const { login, register } = useAuth();
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [role, setRole] = useState('PATIENT');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [clinic, setClinic] = useState('');
   const [auditorSecurityCode, setAuditorSecurityCode] = useState('');
+  const [showAuditorCode, setShowAuditorCode] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -179,13 +184,26 @@ export default function LoginPage({ onBack }) {
                     <div className="relative">
                       <Shield className="w-4 h-4 text-amber-400 absolute left-3.5 top-3 pointer-events-none" />
                       <input
-                        type="password"
+                        type={showAuditorCode ? 'text' : 'password'}
                         required
                         value={auditorSecurityCode}
                         onChange={(e) => setAuditorSecurityCode(e.target.value)}
                         placeholder="Enter Master Security Key"
-                        className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-amber-500 focus:outline-none text-slate-200 placeholder:text-slate-600 font-mono text-xs"
+                        className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-amber-500 focus:outline-none text-slate-200 placeholder:text-slate-600 font-mono text-xs"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowAuditorCode(!showAuditorCode)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-amber-400 focus:outline-none transition-colors p-1 cursor-pointer"
+                        title={showAuditorCode ? 'Hide passcode' : 'Show passcode'}
+                        aria-label={showAuditorCode ? 'Hide passcode' : 'Show passcode'}
+                      >
+                        {showAuditorCode ? (
+                          <EyeOff className="w-4 h-4 text-slate-400 hover:text-amber-400" />
+                        ) : (
+                          <Eye className="w-4 h-4 text-slate-400 hover:text-amber-400" />
+                        )}
+                      </button>
                     </div>
                     <p className="text-[10px] text-slate-500 mt-1">
                       Auditor registration requires an institutional master security authorization key.
@@ -215,20 +233,33 @@ export default function LoginPage({ onBack }) {
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-500 absolute left-3.5 top-3 pointer-events-none" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-slate-200 placeholder:text-slate-600"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-emerald-500 focus:outline-none text-slate-200 placeholder:text-slate-600 text-xs font-mono"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-emerald-400 focus:outline-none transition-colors p-1 cursor-pointer"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4 text-slate-400 hover:text-emerald-400" />
+                  ) : (
+                    <Eye className="w-4 h-4 text-slate-400 hover:text-emerald-400" />
+                  )}
+                </button>
               </div>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full mt-3 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
               {loading ? (
                 <div className="flex items-center gap-2">
@@ -248,7 +279,7 @@ export default function LoginPage({ onBack }) {
             <button
               type="button"
               onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
-              className="text-xs text-slate-400 hover:text-emerald-400 transition-colors"
+              className="text-xs text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
             >
               {isRegistering ? 'Already have an identity? Sign in to vault' : "Don't have an identity yet? Register new account"}
             </button>
